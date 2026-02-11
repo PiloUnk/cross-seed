@@ -20,6 +20,7 @@ import {
   Popcorn,
   Library,
   AlertTriangle,
+  LogIn,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -52,6 +53,11 @@ const navItems = [
         title: 'Library',
         icon: <Library className="size-4" />,
         url: '/library',
+      },
+      {
+        title: 'Candidates',
+        icon: <LogIn className="size-4" />,
+        url: '/candidates',
       },
       {
         title: 'Jobs',
@@ -163,14 +169,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     ? commitLine || buildLine || versionLabel || ''
     : isSourceBuild
       ? commitLine || versionLabel || ''
-    : isPublishedNpm && versionLabel
-      ? `${versionLabel} (npm)`
-    : buildLine || versionLabel || '';
+      : isPublishedNpm && versionLabel
+        ? `${versionLabel} (npm)`
+        : buildLine || versionLabel || '';
   const secondaryLine = preferCommitInfo
-    ? versionLabel ?? ''
+    ? (versionLabel ?? '')
     : isSourceBuild
-      ? versionLabel ?? commitMessage ?? ''
-    : commitMessage ?? '';
+      ? (versionLabel ?? commitMessage ?? '')
+      : (commitMessage ?? '');
   const hasBuildInfo = Boolean(primaryLine || secondaryLine);
 
   const { mutate: logout } = useMutation(

@@ -13,6 +13,7 @@ export const statsRouter = router({
 			timestampResult,
 			decisionsByType,
 			recentMatches,
+			sameInfoHashCandidatesResult,
 			matchAggregates,
 		] = await Promise.all([
 			db("searchee").count({ count: "*" }).first(),
@@ -42,6 +43,7 @@ export const statsRouter = router({
 				.where("last_seen", ">", Date.now() - 24 * 60 * 60 * 1000) // last 24h
 				.count({ count: "*" })
 				.first(),
+			db("candidates").count({ count: "*" }).first(),
 			db("decision")
 				.whereNotNull("info_hash")
 				.select({
@@ -100,6 +102,9 @@ export const statsRouter = router({
 		const healthyIndexers = Number(healthyIndexerResult?.count || 0);
 		const unhealthyIndexers = Math.max(totalIndexers - healthyIndexers, 0);
 		const allIndexersHealthy = unhealthyIndexers === 0;
+		const sameInfoHashCandidates = Number(
+			sameInfoHashCandidatesResult?.count ?? 0,
+		);
 
 		return {
 			totalSearchees,
@@ -118,6 +123,7 @@ export const statsRouter = router({
 			wastedSnatchRate: parseFloat(wastedSnatchRate),
 			unhealthyIndexers,
 			allIndexersHealthy,
+			sameInfoHashCandidates,
 			decisionBreakdown: decisionsByType,
 		};
 	}),

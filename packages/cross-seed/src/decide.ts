@@ -1,5 +1,6 @@
 import bencode from "bencode";
 import chalk from "chalk";
+import type { Knex } from "knex";
 import { readFile, stat, unlink, utimes, writeFile } from "fs/promises";
 import ms from "ms";
 import path from "path";
@@ -61,6 +62,41 @@ export interface ResultAssessment {
 interface TrackerMismatchInfo {
 	candidateTrackers: string[];
 	knownTrackers: string[];
+}
+
+async function upsertCandidateRecord(
+	decisionId: number,
+	trackerMismatch: TrackerMismatchInfo,
+	firstSeen: number,
+	lastSeen: number,
+	trx?: Knex.Transaction,
+): Promise<void> {
+	const dbOrTrx = trx ?? db;
+	const payload = {
+		decision_id: decisionId,
+		candidate_trackers: JSON.stringify(trackerMismatch.candidateTrackers),
+		known_trackers: JSON.stringify(trackerMismatch.knownTrackers),
+		first_seen: firstSeen,
+		last_seen: lastSeen,
+		updated_at: Date.now(),
+	};
+	await dbOrTrx("candidates")
+		.insert(payload)
+		.onConflict("decision_id")
+		.merge({
+			candidate_trackers: payload.candidate_trackers,
+			known_trackers: payload.known_trackers,
+			last_seen: payload.last_seen,
+			updated_at: payload.updated_at,
+		});
+}
+
+async function deleteCandidateRecord(
+	decisionId: number,
+	trx?: Knex.Transaction,
+): Promise<void> {
+	const dbOrTrx = trx ?? db;
+	await dbOrTrx("candidates").where({ decision_id: decisionId }).del();
 }
 
 function normalizeTrackers(trackers: string[] | undefined): string[] {
@@ -689,6 +725,26 @@ async function assessAndSaveResults(
 						})
 						.onConflict(["searchee_id", "guid"])
 						.merge();
+					const decisionRow = await trx("decision")
+						.select("id")
+						.where({ searchee_id: id, guid })
+						.first();
+					if (!decisionRow?.id) return;
+					if (
+						assessment.decision ===
+							Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER &&
+						assessment.trackerMismatch
+					) {
+						await upsertCandidateRecord(
+							decisionRow.id,
+							assessment.trackerMismatch,
+							firstSeen,
+							Date.now(),
+							trx,
+						);
+					} else {
+						await deleteCandidateRecord(decisionRow.id, trx);
+					}
 				});
 			},
 		);
@@ -793,6 +849,16 @@ export async function assessCandidateCaching(
 						? Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER
 						: Decision.INFO_HASH_ALREADY_EXISTS,
 			});
+		if (trackerMismatch) {
+			await upsertCandidateRecord(
+				cacheEntry.id,
+				trackerMismatch,
+				cacheEntry.firstSeen ?? Date.now(),
+				Date.now(),
+			);
+		} else {
+			await deleteCandidateRecord(cacheEntry.id);
+		}
 	} else {
 		assessment = await assessAndSaveResults(
 			metaOrCandidate,

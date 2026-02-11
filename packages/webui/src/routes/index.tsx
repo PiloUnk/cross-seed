@@ -16,8 +16,8 @@ function Home() {
   );
   const showMatchesPerQuery = showDistinctQueryCount;
   const topGridCols = showDistinctQueryCount
-    ? 'lg:grid-cols-5'
-    : 'lg:grid-cols-4';
+    ? 'lg:grid-cols-6'
+    : 'lg:grid-cols-5';
   const conversionGridCols = showMatchesPerQuery
     ? 'lg:grid-cols-4'
     : 'lg:grid-cols-3';
@@ -62,6 +62,11 @@ function Home() {
               title="Total Matches"
               value={statsData.totalMatches.toLocaleString()}
               description="Unique cross-seeds found"
+            />
+            <StatCard
+              title="Same info hash candidates"
+              value={statsData.sameInfoHashCandidates.toLocaleString()}
+              description="Torrents with same info hash on another tracker"
             />
           </div>
           <div className={`grid gap-4 md:grid-cols-2 ${conversionGridCols}`}>

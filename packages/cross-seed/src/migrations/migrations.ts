@@ -15,6 +15,8 @@ import settings from "./13-settings.js";
 import indexerEnabledFlag from "./14-indexer-enabled-flag.js";
 import removeUrlUniqueConstraint from "./15-remove-url-unique-constraint.js";
 import pruneInactiveIndexers from "./16-prune-inactive-indexers.js";
+import candidates from "./17-candidates.js";
+import candidatesTimestamps from "./18-candidates-timestamps.js";
 
 export const migrations = {
 	getMigrations: () =>
@@ -36,6 +38,8 @@ export const migrations = {
 			indexerEnabledFlag,
 			removeUrlUniqueConstraint,
 			pruneInactiveIndexers,
+			candidates,
+			candidatesTimestamps,
 		]),
 	getMigrationName: (migration) => migration.name,
 	getMigration: (migration) => migration,
