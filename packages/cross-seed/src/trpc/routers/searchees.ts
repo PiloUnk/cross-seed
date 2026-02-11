@@ -43,6 +43,36 @@ function parseTrackerList(value: unknown): string[] {
 }
 
 export const searcheesRouter = router({
+	collisionFilters: authedProcedure.query(async () => {
+		const rows = await db("collisions")
+			.join("decision", "collisions.decision_id", "decision.id")
+			.where({
+				"decision.decision":
+					Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER,
+			})
+			.whereNotNull("decision.info_hash")
+			.select({
+				candidateTrackers: "collisions.candidate_trackers",
+				knownTrackers: "collisions.known_trackers",
+			});
+
+		const candidateTrackerSet = new Set<string>();
+		const currentTrackerSet = new Set<string>();
+
+		for (const row of rows) {
+			for (const tracker of parseTrackerList(row.candidateTrackers)) {
+				candidateTrackerSet.add(tracker);
+			}
+			for (const tracker of parseTrackerList(row.knownTrackers)) {
+				currentTrackerSet.add(tracker);
+			}
+		}
+
+		return {
+			candidateTrackers: Array.from(candidateTrackerSet).sort(),
+			currentTrackers: Array.from(currentTrackerSet).sort(),
+		};
+	}),
 	list: authedProcedure
 		.input(
 			z
@@ -190,6 +220,18 @@ export const searcheesRouter = router({
 						.default(DEFAULT_CANDIDATE_LIMIT),
 					offset: z.number().int().min(0).default(0),
 					includeKnownTrackers: z.boolean().optional().default(false),
+					candidateTracker: z
+						.string()
+						.trim()
+						.min(1)
+						.max(300)
+						.optional(),
+					currentTracker: z
+						.string()
+						.trim()
+						.min(1)
+						.max(300)
+						.optional(),
 				})
 				.default({
 					limit: DEFAULT_CANDIDATE_LIMIT,
@@ -198,15 +240,40 @@ export const searcheesRouter = router({
 				}),
 		)
 		.query(async ({ input }) => {
-			const { limit, offset, includeKnownTrackers } = input;
+			const {
+				limit,
+				offset,
+				includeKnownTrackers,
+				candidateTracker,
+				currentTracker,
+			} = input;
 
-			const query = db("collisions")
+			const escapeLikeValue = (value: string) =>
+				value.replace(/[\\%_]/g, "\\$&");
+			const buildLikePattern = (value: string) =>
+				`%"${escapeLikeValue(value)}"%`;
+
+			let query = db("collisions")
 				.join("decision", "collisions.decision_id", "decision.id")
 				.where({
 					"decision.decision":
 						Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER,
 				})
 				.whereNotNull("decision.info_hash");
+
+			if (candidateTracker) {
+				query = query.whereRaw(
+					"collisions.candidate_trackers like ? escape '\\'",
+					[buildLikePattern(candidateTracker)],
+				);
+			}
+
+			if (currentTracker) {
+				query = query.whereRaw(
+					"collisions.known_trackers like ? escape '\\'",
+					[buildLikePattern(currentTracker)],
+				);
+			}
 
 			const [{ count }] = await query
 				.clone()

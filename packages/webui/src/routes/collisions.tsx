@@ -12,12 +12,25 @@ import {
 } from '@/components/ui/table';
 import { Page } from '@/components/Page';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { formatRelativeTime } from '@/lib/time';
 import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  RotateCcw,
   Shuffle,
 } from 'lucide-react';
 
@@ -31,14 +44,27 @@ function CollisionsPage() {
   const trpc = useTRPC();
   const [page, setPage] = useState(0);
   const [showClient, setShowClient] = useState(false);
+  const [candidateTrackerFilter, setCandidateTrackerFilter] = useState('all');
+  const [currentTrackerFilter, setCurrentTrackerFilter] = useState('all');
+
+  const { data: filterOptions } = useSuspenseQuery(
+    trpc.searchees.collisionFilters.queryOptions(),
+  );
+
+  const candidateFilterValue =
+    candidateTrackerFilter === 'all' ? undefined : candidateTrackerFilter;
+  const currentFilterValue =
+    currentTrackerFilter === 'all' ? undefined : currentTrackerFilter;
 
   const queryInput = useMemo(
     () => ({
       limit: PAGE_SIZE,
       offset: page * PAGE_SIZE,
       includeKnownTrackers: true,
+      candidateTracker: candidateFilterValue,
+      currentTracker: currentFilterValue,
     }),
-    [page],
+    [page, candidateFilterValue, currentFilterValue],
   );
 
   const query = useSuspenseQuery(
@@ -57,6 +83,10 @@ function CollisionsPage() {
       setPage(newPage);
     }
   }, [data.total, page]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [candidateTrackerFilter, currentTrackerFilter]);
 
   const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
   const canGoPrev = page > 0;
@@ -82,8 +112,65 @@ function CollisionsPage() {
             Showing {rangeStart}-{rangeEnd} of {data.total} items
           </p>
         </div>
-        <div className="bg-muted/30 text-muted-foreground flex flex-col gap-2 rounded-lg border px-3 py-2 text-sm lg:flex-row lg:items-center lg:gap-4">
-          <div className="flex items-center gap-2">
+        <div className="bg-muted/30 text-muted-foreground flex flex-col gap-3 rounded-lg border px-3 py-2 text-sm lg:flex-row lg:items-center lg:gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => {
+                      setCandidateTrackerFilter('all');
+                      setCurrentTrackerFilter('all');
+                    }}
+                    disabled={
+                      candidateTrackerFilter === 'all' &&
+                      currentTrackerFilter === 'all'
+                    }
+                  >
+                    <span className="sr-only">Reset filters</span>
+                    <RotateCcw className="size-4" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Reset filters
+              </TooltipContent>
+            </Tooltip>
+            <Select
+              value={candidateTrackerFilter}
+              onValueChange={setCandidateTrackerFilter}
+            >
+              <SelectTrigger size="sm" className="min-w-[200px]">
+                <SelectValue placeholder="Candidate tracker" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All candidate trackers</SelectItem>
+                {filterOptions.candidateTrackers.map((tracker) => (
+                  <SelectItem key={tracker} value={tracker}>
+                    {tracker}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={currentTrackerFilter}
+              onValueChange={setCurrentTrackerFilter}
+            >
+              <SelectTrigger size="sm" className="min-w-[200px]">
+                <SelectValue placeholder="Current tracker" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All current trackers</SelectItem>
+                {filterOptions.currentTrackers.map((tracker) => (
+                  <SelectItem key={tracker} value={tracker}>
+                    {tracker}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
               size="sm"
