@@ -79,7 +79,7 @@ program
 			console.log("Clearing cache...");
 			await db("decision").whereNull("info_hash").del();
 			await db("timestamp").del();
-			await db("candidates").del();
+			await db("collisions").del();
 		}),
 	);
 

@@ -20,7 +20,7 @@ import {
   Popcorn,
   Library,
   AlertTriangle,
-  LogIn,
+  Shuffle,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -55,9 +55,9 @@ const navItems = [
         url: '/library',
       },
       {
-        title: 'Candidates',
-        icon: <LogIn className="size-4" />,
-        url: '/candidates',
+        title: 'Collisions',
+        icon: <Shuffle className="size-4" />,
+        url: '/collisions',
       },
       {
         title: 'Jobs',

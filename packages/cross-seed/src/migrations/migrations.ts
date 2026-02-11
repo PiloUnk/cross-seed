@@ -17,6 +17,7 @@ import removeUrlUniqueConstraint from "./15-remove-url-unique-constraint.js";
 import pruneInactiveIndexers from "./16-prune-inactive-indexers.js";
 import candidates from "./17-candidates.js";
 import candidatesTimestamps from "./18-candidates-timestamps.js";
+import collisions from "./19-collisions.js";
 
 export const migrations = {
 	getMigrations: () =>
@@ -40,6 +41,7 @@ export const migrations = {
 			pruneInactiveIndexers,
 			candidates,
 			candidatesTimestamps,
+			collisions,
 		]),
 	getMigrationName: (migration) => migration.name,
 	getMigration: (migration) => migration,

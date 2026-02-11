@@ -200,8 +200,8 @@ export const searcheesRouter = router({
 		.query(async ({ input }) => {
 			const { limit, offset, includeKnownTrackers } = input;
 
-			const query = db("candidates")
-				.join("decision", "candidates.decision_id", "decision.id")
+			const query = db("collisions")
+				.join("decision", "collisions.decision_id", "decision.id")
 				.where({
 					"decision.decision":
 						Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER,
@@ -220,10 +220,10 @@ export const searcheesRouter = router({
 					name: "searchee.name",
 					infoHash: "decision.info_hash",
 					guid: "decision.guid",
-					firstSeen: "candidates.first_seen",
-					lastSeen: "candidates.last_seen",
-					candidateTrackers: "candidates.candidate_trackers",
-					knownTrackers: "candidates.known_trackers",
+					firstSeen: "collisions.first_seen",
+					lastSeen: "collisions.last_seen",
+					candidateTrackers: "collisions.candidate_trackers",
+					knownTrackers: "collisions.known_trackers",
 				})
 				.orderBy("decision.last_seen", "desc")
 				.orderBy("searchee.name", "asc")

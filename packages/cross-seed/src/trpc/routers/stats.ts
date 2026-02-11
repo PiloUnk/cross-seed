@@ -43,7 +43,7 @@ export const statsRouter = router({
 				.where("last_seen", ">", Date.now() - 24 * 60 * 60 * 1000) // last 24h
 				.count({ count: "*" })
 				.first(),
-			db("candidates").count({ count: "*" }).first(),
+			db("collisions").count({ count: "*" }).first(),
 			db("decision")
 				.whereNotNull("info_hash")
 				.select({

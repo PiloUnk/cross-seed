@@ -80,7 +80,7 @@ async function upsertCandidateRecord(
 		last_seen: lastSeen,
 		updated_at: Date.now(),
 	};
-	await dbOrTrx("candidates")
+	await dbOrTrx("collisions")
 		.insert(payload)
 		.onConflict("decision_id")
 		.merge({
@@ -96,7 +96,7 @@ async function deleteCandidateRecord(
 	trx?: Knex.Transaction,
 ): Promise<void> {
 	const dbOrTrx = trx ?? db;
-	await dbOrTrx("candidates").where({ decision_id: decisionId }).del();
+	await dbOrTrx("collisions").where({ decision_id: decisionId }).del();
 }
 
 function normalizeTrackers(trackers: string[] | undefined): string[] {

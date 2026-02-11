@@ -64,7 +64,7 @@ function Home() {
               description="Unique cross-seeds found"
             />
             <StatCard
-              title="Same info hash candidates"
+              title="Info hash collisions"
               value={statsData.sameInfoHashCandidates.toLocaleString()}
               description="Torrents with same info hash on another tracker"
             />

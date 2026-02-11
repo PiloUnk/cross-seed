@@ -18,15 +18,16 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Shuffle,
 } from 'lucide-react';
 
-export const Route = createFileRoute('/candidates')({
-  component: CandidatesPage,
+export const Route = createFileRoute('/collisions')({
+  component: CollisionsPage,
 });
 
 const PAGE_SIZE = 25;
 
-function CandidatesPage() {
+function CollisionsPage() {
   const trpc = useTRPC();
   const [page, setPage] = useState(0);
   const [showClient, setShowClient] = useState(false);
@@ -68,10 +69,15 @@ function CandidatesPage() {
     value ? formatRelativeTime(value) : 'Never';
 
   return (
-    <Page>
+    <Page breadcrumbs={['Collisions']}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Candidates</h1>
+          <div className="flex items-center gap-2">
+            <span className="bg-muted text-muted-foreground inline-flex h-9 w-9 items-center justify-center rounded-full">
+              <Shuffle className="size-5" />
+            </span>
+            <h1 className="text-2xl font-semibold">Collisions</h1>
+          </div>
           <p className="text-muted-foreground text-sm">
             Showing {rangeStart}-{rangeEnd} of {data.total} items
           </p>
@@ -142,7 +148,7 @@ function CandidatesPage() {
           <TableHeader className="bg-muted sticky top-0 z-10">
             <TableRow className="border-b">
               <TableHead>Name</TableHead>
-              <TableHead>Info Hash</TableHead>
+              <TableHead>Conflicting Info Hash</TableHead>
               <TableHead>Candidate Tracker</TableHead>
               <TableHead>Current Tracker</TableHead>
               <TableHead>First Seen</TableHead>
@@ -159,10 +165,10 @@ function CandidatesPage() {
                 >
                   <div className="flex flex-col items-center gap-2">
                     <span className="text-muted-foreground text-sm">
-                      No candidates found.
+                      No collisions found.
                     </span>
                     <span className="text-muted-foreground text-xs">
-                      Candidates appear when info hashes match across trackers.
+                      Collisions appear when info hashes match across trackers.
                     </span>
                   </div>
                 </TableCell>
