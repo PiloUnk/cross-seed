@@ -18,6 +18,7 @@ export interface DbIndexer {
 	url: string;
 	apikey: string;
 	trackers: string | null;
+	privacy: string | null;
 	/**
 	 * When false, the indexer has been disabled by the user and should not be
 	 * used for searching or RSS, but can be used for fetching caps or
@@ -83,6 +84,7 @@ export interface Indexer {
 	url: string;
 	apikey: string;
 	trackers: string[] | null;
+	privacy: string | null;
 	enabled: boolean;
 	status: IndexerStatus;
 	retryAfter: number;
@@ -104,6 +106,7 @@ const allFields = {
 	name: "name",
 	apikey: "apikey",
 	trackers: "trackers",
+	privacy: "privacy",
 	enabled: "enabled",
 	status: "status",
 	retryAfter: "retry_after",
@@ -166,6 +169,7 @@ export function deserialize(dbIndexer: DbIndexer): Indexer {
 		audioSearchCap: Boolean(rest.audioSearchCap),
 		bookSearchCap: Boolean(rest.bookSearchCap),
 		trackers: JSON.parse(trackers ?? "null"),
+		privacy: dbIndexer.privacy ?? null,
 		tvIdCaps: JSON.parse(tvIdCaps ?? "null"),
 		movieIdCaps: JSON.parse(movieIdCaps ?? "null"),
 		categories: JSON.parse(catCaps ?? "null"),
@@ -178,6 +182,13 @@ export function deserialize(dbIndexer: DbIndexer): Indexer {
  */
 export async function getAllIndexers(): Promise<Indexer[]> {
 	return (await db("indexer").select(allFields)).map(deserialize);
+}
+
+export async function updateIndexerPrivacyById(
+	indexerId: number,
+	privacy: string | null,
+): Promise<void> {
+	await db("indexer").where({ id: indexerId }).update({ privacy });
 }
 
 /**

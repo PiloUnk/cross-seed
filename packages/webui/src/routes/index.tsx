@@ -64,9 +64,9 @@ function Home() {
               description="Unique cross-seeds found"
             />
             <StatCard
-              title="Info hash collisions"
+              title="Info Hash Collisions"
               value={statsData.sameInfoHashCandidates.toLocaleString()}
-              description="Torrents with same info hash on another tracker"
+              description="Rejected torrents with conflicting info hash"
             />
           </div>
           <div className={`grid gap-4 md:grid-cols-2 ${conversionGridCols}`}>

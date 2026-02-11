@@ -64,6 +64,64 @@ interface TrackerMismatchInfo {
 	knownTrackers: string[];
 }
 
+const ALLOWED_INDEXER_PRIVACY = new Set(["private", "semi-private"]);
+
+function isAllowedPrivacy(value: string | null | undefined): boolean {
+	return value != null && ALLOWED_INDEXER_PRIVACY.has(value);
+}
+
+function getTorrentPrivateFlag(meta: Metafile | null): boolean | null {
+	if (!meta) return null;
+	const flag = meta.raw?.info?.private;
+	if (flag === 1) return true;
+	if (flag === 0) return false;
+	return null;
+}
+
+async function canRecordPrivateCollision(
+	candidateIndexerId: number | undefined,
+	candidateMetafile: Metafile | null,
+	context?: {
+		name?: string;
+		tracker?: string;
+		infoHash?: string | null;
+	},
+): Promise<boolean> {
+	const candidateFlag = getTorrentPrivateFlag(candidateMetafile);
+	if (candidateFlag === false) {
+		const infoHash = context?.infoHash
+			? sanitizeInfoHash(context.infoHash)
+			: "unknown";
+		logger.verbose({
+			label: Label.DECIDE,
+			message: `Skipping collision record for ${context?.name ?? "candidate"} (${context?.tracker ?? "unknown"}) [${infoHash}]: candidate torrent is public`,
+		});
+		return false;
+	}
+	if (candidateFlag === true) return true;
+
+	if (!candidateIndexerId) {
+		logger.verbose({
+			label: Label.DECIDE,
+			message: `Skipping collision record for ${context?.name ?? "candidate"} (${context?.tracker ?? "unknown"}): missing indexer id for privacy lookup`,
+		});
+		return false;
+	}
+	const indexer = await db("indexer")
+		.select("privacy")
+		.where({ id: candidateIndexerId })
+		.first();
+	const privacy = (indexer?.privacy as string | null) ?? null;
+	if (!isAllowedPrivacy(privacy)) {
+		logger.verbose({
+			label: Label.DECIDE,
+			message: `Skipping collision record for ${context?.name ?? "candidate"} (${context?.tracker ?? "unknown"}): indexer privacy is ${privacy ?? "unknown"}`,
+		});
+		return false;
+	}
+	return true;
+}
+
 async function upsertCandidateRecord(
 	decisionId: number,
 	trackerMismatch: TrackerMismatchInfo,
@@ -735,13 +793,35 @@ async function assessAndSaveResults(
 							Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER &&
 						assessment.trackerMismatch
 					) {
-						await upsertCandidateRecord(
-							decisionRow.id,
-							assessment.trackerMismatch,
-							firstSeen,
-							Date.now(),
-							trx,
+						const shouldRecord = await canRecordPrivateCollision(
+							metaOrCandidate instanceof Metafile
+								? undefined
+								: metaOrCandidate.indexerId,
+							assessment.metafile ??
+								(metaOrCandidate instanceof Metafile
+									? metaOrCandidate
+									: null),
+							metaOrCandidate instanceof Metafile
+								? undefined
+								: {
+										name: metaOrCandidate.name,
+										tracker: metaOrCandidate.tracker,
+										infoHash:
+											assessment.metafile?.infoHash ??
+											null,
+									},
 						);
+						if (shouldRecord) {
+							await upsertCandidateRecord(
+								decisionRow.id,
+								assessment.trackerMismatch,
+								firstSeen,
+								Date.now(),
+								trx,
+							);
+						} else {
+							await deleteCandidateRecord(decisionRow.id, trx);
+						}
 					} else {
 						await deleteCandidateRecord(decisionRow.id, trx);
 					}
@@ -850,12 +930,28 @@ export async function assessCandidateCaching(
 						: Decision.INFO_HASH_ALREADY_EXISTS,
 			});
 		if (trackerMismatch) {
-			await upsertCandidateRecord(
-				cacheEntry.id,
-				trackerMismatch,
-				cacheEntry.firstSeen ?? Date.now(),
-				Date.now(),
-			);
+			if (
+				await canRecordPrivateCollision(
+					candidate.indexerId,
+					metaOrCandidate instanceof Metafile
+						? metaOrCandidate
+						: null,
+					{
+						name: candidate.name,
+						tracker: candidate.tracker,
+						infoHash: cacheEntry.infoHash ?? null,
+					},
+				)
+			) {
+				await upsertCandidateRecord(
+					cacheEntry.id,
+					trackerMismatch,
+					cacheEntry.firstSeen ?? Date.now(),
+					Date.now(),
+				);
+			} else {
+				await deleteCandidateRecord(cacheEntry.id);
+			}
 		} else {
 			await deleteCandidateRecord(cacheEntry.id);
 		}

@@ -28,6 +28,7 @@ import {
 	Indexer,
 	IndexerStatus,
 	updateIndexerCapsById,
+	updateIndexerPrivacyById,
 	updateIndexerStatus,
 } from "./indexers.js";
 import { Label, logger } from "./logger.js";
@@ -660,6 +661,47 @@ async function fetchCaps(indexer: Indexer): Promise<Caps> {
 	}
 }
 
+function buildProwlarrIndexerUrl(indexer: Indexer): string | null {
+	try {
+		const url = new URL(indexer.url);
+		const torznabIndex = url.pathname.indexOf("/torznab/");
+		if (torznabIndex === -1) return null;
+		const basePath = url.pathname.slice(0, torznabIndex);
+		url.pathname = `${basePath}/api/v1/indexer/${indexer.id}`;
+		url.search = "";
+		return url.toString();
+	} catch {
+		return null;
+	}
+}
+
+function normalizePrivacy(value: unknown): string | null {
+	if (typeof value !== "string" || !value.length) return null;
+	const normalized = value.trim().toLowerCase();
+	if (normalized === "semiprivate") return "semi-private";
+	if (normalized === "semi_private") return "semi-private";
+	if (normalized === "semi-private") return "semi-private";
+	if (normalized === "private" || normalized === "public") return normalized;
+	return normalized;
+}
+
+async function fetchIndexerPrivacy(indexer: Indexer): Promise<string | null> {
+	const url = buildProwlarrIndexerUrl(indexer);
+	if (!url) return null;
+	try {
+		const response = await fetch(url, {
+			headers: { "User-Agent": USER_AGENT, "X-Api-Key": indexer.apikey },
+			signal: AbortSignal.timeout(ms("10 seconds")),
+		});
+		if (!response.ok) return null;
+		const payload = (await response.json()) as { privacy?: string };
+		return normalizePrivacy(payload?.privacy);
+	} catch (e) {
+		logger.debug(e);
+		return null;
+	}
+}
+
 function collateOutcomes<Correlator, SuccessReturnType>(
 	correlators: Correlator[],
 	outcomes: PromiseSettledResult<SuccessReturnType>[],
@@ -695,6 +737,15 @@ export async function updateCaps(): Promise<void> {
 	for (const [indexerId, caps] of fulfilled) {
 		await updateIndexerCapsById(indexerId, caps);
 	}
+
+	const privacyOutcomes = await Promise.allSettled<string | null>(
+		indexers.map((indexer) => fetchIndexerPrivacy(indexer)),
+	);
+	for (const [idx, outcome] of privacyOutcomes.entries()) {
+		if (outcome.status === "fulfilled") {
+			await updateIndexerPrivacyById(indexers[idx].id, outcome.value);
+		}
+	}
 	for (const indexer of indexers) {
 		logIndexerMediaTypes(indexer);
 	}
@@ -704,6 +755,8 @@ export async function updateCapsForIndexer(indexer: Indexer): Promise<void> {
 	try {
 		const caps = await fetchCaps(indexer);
 		await updateIndexerCapsById(indexer.id, caps);
+		const privacy = await fetchIndexerPrivacy(indexer);
+		await updateIndexerPrivacyById(indexer.id, privacy);
 		const updatedIndexer: Indexer = {
 			...indexer,
 			searchCap: caps.search,
