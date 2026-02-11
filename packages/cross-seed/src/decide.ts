@@ -1,4 +1,5 @@
 import bencode from "bencode";
+import chalk from "chalk";
 import { readFile, stat, unlink, utimes, writeFile } from "fs/promises";
 import ms from "ms";
 import path from "path";
@@ -35,6 +36,7 @@ import {
 } from "./searchee.js";
 import {
 	findAllTorrentFilesInDir,
+	getKnownTrackersForInfoHash,
 	parseTorrentFromPath,
 	snatch,
 	SnatchError,
@@ -53,6 +55,39 @@ export interface ResultAssessment {
 	decision: Decision;
 	metafile?: Metafile;
 	metaCached?: boolean;
+	trackerMismatch?: TrackerMismatchInfo;
+}
+
+interface TrackerMismatchInfo {
+	candidateTrackers: string[];
+	knownTrackers: string[];
+}
+
+function normalizeTrackers(trackers: string[] | undefined): string[] {
+	return Array.from(
+		new Set(
+			(trackers ?? []).map((tracker) => tracker.trim()).filter(Boolean),
+		),
+	).sort();
+}
+
+function trackersAreEqual(a: string[], b: string[]): boolean {
+	if (a.length !== b.length) return false;
+	return a.every((value, index) => value === b[index]);
+}
+
+async function logAnnounceMismatch(
+	metafile: Metafile,
+): Promise<TrackerMismatchInfo | null> {
+	const known = await getKnownTrackersForInfoHash(metafile.infoHash);
+	if (!known) return null;
+
+	const candidateTrackers = normalizeTrackers(metafile.trackers);
+	const knownTrackers = normalizeTrackers(known.trackers);
+	if (!candidateTrackers.length && !knownTrackers.length) return null;
+	if (trackersAreEqual(candidateTrackers, knownTrackers)) return null;
+
+	return { candidateTrackers, knownTrackers };
 }
 
 function logDecision(
@@ -61,6 +96,7 @@ function logDecision(
 	decision: Decision,
 	metafile: Metafile | undefined,
 	tracker: string,
+	trackerMismatch: TrackerMismatchInfo | undefined,
 	options?: { configOverride: Partial<RuntimeConfig> },
 ): void {
 	const { blockList, matchMode } = getRuntimeConfig(options?.configOverride);
@@ -114,6 +150,16 @@ function logDecision(
 			break;
 		case Decision.INFO_HASH_ALREADY_EXISTS:
 			reason = "the infoHash matches a torrent you already have";
+			break;
+		case Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER:
+			reason =
+				"the infoHash matches a torrent you already have on another tracker:";
+			if (trackerMismatch?.candidateTrackers.length) {
+				reason += ` candidate=[${trackerMismatch.candidateTrackers.join(", ")}]`;
+			}
+			if (trackerMismatch?.knownTrackers.length) {
+				reason += ` existing=[${chalk.yellow(trackerMismatch.knownTrackers.join(", "))}]`;
+			}
 			break;
 		case Decision.FILE_TREE_MISMATCH:
 			reason = `it has a different file tree${matchMode === MatchMode.STRICT ? " (will match in flexible or partial matchMode)" : ""}`;
@@ -396,10 +442,14 @@ export async function assessCandidate(
 	}
 
 	if (infoHashesToExclude.has(metafile.infoHash)) {
+		const trackerMismatch = await logAnnounceMismatch(metafile);
 		return {
-			decision: Decision.INFO_HASH_ALREADY_EXISTS,
+			decision: trackerMismatch
+				? Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER
+				: Decision.INFO_HASH_ALREADY_EXISTS,
 			metafile,
 			metaCached,
+			trackerMismatch: trackerMismatch ?? undefined,
 		};
 	}
 
@@ -722,15 +772,26 @@ export async function assessCandidateCaching(
 
 	let assessment: ResultAssessment;
 	if (cacheEntry && infoHashesToExclude.has(cacheEntry.infoHash)) {
+		const trackerMismatch =
+			metaOrCandidate instanceof Metafile
+				? await logAnnounceMismatch(metaOrCandidate)
+				: null;
 		// Already injected fast path, preserve match decision
-		assessment = { decision: Decision.INFO_HASH_ALREADY_EXISTS };
+		assessment = {
+			decision: trackerMismatch
+				? Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER
+				: Decision.INFO_HASH_ALREADY_EXISTS,
+			trackerMismatch: trackerMismatch ?? undefined,
+		};
 		await db("decision")
 			.where({ id: cacheEntry.id })
 			.update({
 				last_seen: Date.now(),
 				decision: isAnyMatchedDecision(cacheEntry.decision)
 					? cacheEntry.decision
-					: Decision.INFO_HASH_ALREADY_EXISTS,
+					: trackerMismatch
+						? Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER
+						: Decision.INFO_HASH_ALREADY_EXISTS,
 			});
 	} else {
 		assessment = await assessAndSaveResults(
@@ -750,6 +811,7 @@ export async function assessCandidateCaching(
 		assessment.decision,
 		assessment.metafile,
 		tracker,
+		assessment.trackerMismatch,
 		options,
 	);
 

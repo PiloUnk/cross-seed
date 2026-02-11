@@ -109,7 +109,11 @@ function parseData(data: string) {
 }
 
 function determineResponse(result: {
-	decision: DecisionAnyMatch | Decision.INFO_HASH_ALREADY_EXISTS | null;
+	decision:
+		| DecisionAnyMatch
+		| Decision.INFO_HASH_ALREADY_EXISTS
+		| Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER
+		| null;
 	actionResult: ActionResult | null;
 }): { status: number; state: string } {
 	const injected = result.actionResult === InjectionResult.SUCCESS;
@@ -119,6 +123,7 @@ function determineResponse(result: {
 		result.actionResult === SaveResult.SAVED;
 	const exists =
 		result.decision === Decision.INFO_HASH_ALREADY_EXISTS ||
+		result.decision === Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER ||
 		result.actionResult === InjectionResult.ALREADY_EXISTS;
 	const incomplete =
 		result.actionResult === InjectionResult.TORRENT_NOT_COMPLETE;

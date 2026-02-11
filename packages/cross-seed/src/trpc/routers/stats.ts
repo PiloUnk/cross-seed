@@ -50,7 +50,7 @@ export const statsRouter = router({
 						"COUNT(DISTINCT CASE WHEN decision IN ('MATCH','MATCH_SIZE_ONLY','MATCH_PARTIAL') THEN info_hash END)",
 					),
 					matchCountWithInfoHash: db.raw(
-						"COUNT(DISTINCT CASE WHEN decision IN ('MATCH','MATCH_SIZE_ONLY','MATCH_PARTIAL','SAME_INFO_HASH','INFO_HASH_ALREADY_EXISTS') THEN info_hash END)",
+						"COUNT(DISTINCT CASE WHEN decision IN ('MATCH','MATCH_SIZE_ONLY','MATCH_PARTIAL','SAME_INFO_HASH','INFO_HASH_ALREADY_EXISTS','INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER') THEN info_hash END)",
 					),
 				})
 				.first(),

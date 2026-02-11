@@ -535,7 +535,11 @@ export async function checkNewCandidateMatch(
 	candidate: Candidate,
 	searcheeLabel: SearcheeLabel,
 ): Promise<{
-	decision: DecisionAnyMatch | Decision.INFO_HASH_ALREADY_EXISTS | null;
+	decision:
+		| DecisionAnyMatch
+		| Decision.INFO_HASH_ALREADY_EXISTS
+		| Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER
+		| null;
 	actionResult: ActionResult | null;
 }> {
 	const searchees: SearcheeWithLabel[] = [];
@@ -574,8 +578,11 @@ export async function checkNewCandidateMatch(
 	const infoHashesToExclude = await getInfoHashesToExclude();
 	const guidInfoHashMap = await getGuidInfoHashMap();
 
-	let decision: DecisionAnyMatch | Decision.INFO_HASH_ALREADY_EXISTS | null =
-		null;
+	let decision:
+		| DecisionAnyMatch
+		| Decision.INFO_HASH_ALREADY_EXISTS
+		| Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER
+		| null = null;
 	let actionResult: ActionResult | null = null;
 	let matchedSearchee: SearcheeWithLabel | null = null;
 	let matchedAssessment: ResultAssessment | null = null;
@@ -591,7 +598,11 @@ export async function checkNewCandidateMatch(
 			infoHashesToExclude,
 			guidInfoHashMap,
 		);
-		if (assessment.decision === Decision.INFO_HASH_ALREADY_EXISTS) {
+		if (
+			assessment.decision === Decision.INFO_HASH_ALREADY_EXISTS ||
+			assessment.decision ===
+				Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER
+		) {
 			decision = assessment.decision;
 			break; // In client before rss/announce
 		}

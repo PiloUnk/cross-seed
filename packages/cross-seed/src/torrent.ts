@@ -55,6 +55,7 @@ import {
 	mapAsync,
 	Mutex,
 	notExists,
+	sanitizeInfoHash,
 	stripExtension,
 	wait,
 	withMutex,
@@ -63,6 +64,15 @@ import {
 export interface TorrentLocator {
 	infoHash?: string;
 	path?: string;
+}
+
+export interface KnownTrackersResult {
+	source: "client" | "torrentDir";
+	trackers: string[];
+	clientDetails?: {
+		host: string;
+		type?: string;
+	}[];
 }
 
 export interface FilenameMetadata {
@@ -699,6 +709,70 @@ export async function getInfoHashesToExclude(): Promise<Set<string>> {
 	const { useClientTorrents } = getRuntimeConfig();
 	const database = useClientTorrents ? db("client_searchee") : db("torrent");
 	return new Set((await database.select("*")).map((e) => e.info_hash));
+}
+
+export async function getKnownTrackersForInfoHash(
+	infoHash: string,
+): Promise<KnownTrackersResult | null> {
+	const { useClientTorrents } = getRuntimeConfig();
+	if (useClientTorrents) {
+		const rows = await db("client_searchee")
+			.select("trackers", "client_host")
+			.where({ info_hash: infoHash });
+		if (!rows.length) return null;
+		const clientsByHost = new Map<string, { type?: string }>();
+		const clients = getClients();
+		for (const row of rows) {
+			const host = row.client_host as string | null;
+			if (!host) continue;
+			if (!clientsByHost.has(host)) {
+				clientsByHost.set(host, {
+					type: clients.find((c) => c.clientHost === host)
+						?.clientType,
+				});
+			}
+		}
+		const clientDetails = Array.from(clientsByHost.entries()).map(
+			([host, detail]) => ({
+				host,
+				type: detail.type,
+			}),
+		);
+		const trackers = rows.flatMap((row) => {
+			try {
+				return JSON.parse(row.trackers ?? "[]");
+			} catch (e) {
+				logOnce(`trackers-parse-${infoHash}`, () => {
+					logger.debug({
+						label: Label.DECIDE,
+						message: `Failed to parse trackers for ${sanitizeInfoHash(infoHash)}: ${e.message}`,
+					});
+				});
+				return [];
+			}
+		});
+		return { source: "client", trackers, clientDetails };
+	}
+
+	const rows = await db("torrent")
+		.select("file_path")
+		.where({ info_hash: infoHash });
+	if (!rows.length) return null;
+	const trackers: string[] = [];
+	for (const row of rows) {
+		try {
+			const meta = await parseTorrentFromPath(row.file_path);
+			trackers.push(...meta.trackers);
+		} catch (e) {
+			logOnce(`trackers-parse-${infoHash}-${row.file_path}`, () => {
+				logger.debug({
+					label: Label.DECIDE,
+					message: `Failed to parse torrent for trackers ${row.file_path}: ${e.message}`,
+				});
+			});
+		}
+	}
+	return { source: "torrentDir", trackers };
 }
 
 export async function loadTorrentDirLight(
