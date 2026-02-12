@@ -31,7 +31,6 @@ import {
   ChevronsLeft,
   ChevronsRight,
   RotateCcw,
-  Shuffle,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/collisions')({
@@ -103,9 +102,6 @@ function CollisionsPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="bg-muted text-muted-foreground inline-flex h-9 w-9 items-center justify-center rounded-full">
-              <Shuffle className="size-5" />
-            </span>
             <h1 className="text-2xl font-semibold">Collisions</h1>
           </div>
           <p className="text-muted-foreground text-sm">
