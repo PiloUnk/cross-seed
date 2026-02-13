@@ -19,6 +19,7 @@ import candidates from "./17-candidates.js";
 import candidatesTimestamps from "./18-candidates-timestamps.js";
 import collisions from "./19-collisions.js";
 import indexerPrivacy from "./20-indexer-privacy.js";
+import dropIndexerPrivacy from "./21-drop-indexer-privacy.js";
 
 export const migrations = {
 	getMigrations: () =>
@@ -44,6 +45,7 @@ export const migrations = {
 			candidatesTimestamps,
 			collisions,
 			indexerPrivacy,
+			dropIndexerPrivacy,
 		]),
 	getMigrationName: (migration) => migration.name,
 	getMigration: (migration) => migration,

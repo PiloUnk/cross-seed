@@ -64,12 +64,6 @@ interface TrackerMismatchInfo {
 	knownTrackers: string[];
 }
 
-const ALLOWED_INDEXER_PRIVACY = new Set(["private", "semi-private"]);
-
-function isAllowedPrivacy(value: string | null | undefined): boolean {
-	return value != null && ALLOWED_INDEXER_PRIVACY.has(value);
-}
-
 function getTorrentPrivateFlag(meta: Metafile | null): boolean | null {
 	if (!meta) return null;
 	const flag = meta.raw?.info?.private;
@@ -79,7 +73,6 @@ function getTorrentPrivateFlag(meta: Metafile | null): boolean | null {
 }
 
 async function canRecordPrivateCollision(
-	candidateIndexerId: number | undefined,
 	candidateMetafile: Metafile | null,
 	context?: {
 		name?: string;
@@ -88,41 +81,20 @@ async function canRecordPrivateCollision(
 	},
 ): Promise<boolean> {
 	const candidateFlag = getTorrentPrivateFlag(candidateMetafile);
-	if (candidateFlag === false) {
+	if (candidateFlag !== true) {
 		const infoHash = context?.infoHash
 			? sanitizeInfoHash(context.infoHash)
 			: "unknown";
 		logger.verbose({
 			label: Label.DECIDE,
-			message: `Skipping collision record for ${context?.name ?? "candidate"} (${context?.tracker ?? "unknown"}) [${infoHash}]: candidate torrent is public`,
-		});
-		return false;
-	}
-	if (candidateFlag === true) return true;
-
-	if (!candidateIndexerId) {
-		logger.verbose({
-			label: Label.DECIDE,
-			message: `Skipping collision record for ${context?.name ?? "candidate"} (${context?.tracker ?? "unknown"}): missing indexer id for privacy lookup`,
-		});
-		return false;
-	}
-	const indexer = await db("indexer")
-		.select("privacy")
-		.where({ id: candidateIndexerId })
-		.first();
-	const privacy = (indexer?.privacy as string | null) ?? null;
-	if (!isAllowedPrivacy(privacy)) {
-		logger.verbose({
-			label: Label.DECIDE,
-			message: `Skipping collision record for ${context?.name ?? "candidate"} (${context?.tracker ?? "unknown"}): indexer privacy is ${privacy ?? "unknown"}`,
+			message: `Skipping collision record for ${context?.name ?? "candidate"} (${context?.tracker ?? "unknown"}) [${infoHash}]: candidate torrent is not private`,
 		});
 		return false;
 	}
 	return true;
 }
 
-async function upsertCandidateRecord(
+async function upsertCollisionRecord(
 	decisionId: number,
 	trackerMismatch: TrackerMismatchInfo,
 	firstSeen: number,
@@ -149,7 +121,7 @@ async function upsertCandidateRecord(
 		});
 }
 
-async function deleteCandidateRecord(
+async function deleteCollisionRecord(
 	decisionId: number,
 	trx?: Knex.Transaction,
 ): Promise<void> {
@@ -794,9 +766,6 @@ async function assessAndSaveResults(
 						assessment.trackerMismatch
 					) {
 						const shouldRecord = await canRecordPrivateCollision(
-							metaOrCandidate instanceof Metafile
-								? undefined
-								: metaOrCandidate.indexerId,
 							assessment.metafile ??
 								(metaOrCandidate instanceof Metafile
 									? metaOrCandidate
@@ -812,7 +781,7 @@ async function assessAndSaveResults(
 									},
 						);
 						if (shouldRecord) {
-							await upsertCandidateRecord(
+							await upsertCollisionRecord(
 								decisionRow.id,
 								assessment.trackerMismatch,
 								firstSeen,
@@ -820,10 +789,10 @@ async function assessAndSaveResults(
 								trx,
 							);
 						} else {
-							await deleteCandidateRecord(decisionRow.id, trx);
+							await deleteCollisionRecord(decisionRow.id, trx);
 						}
 					} else {
-						await deleteCandidateRecord(decisionRow.id, trx);
+						await deleteCollisionRecord(decisionRow.id, trx);
 					}
 				});
 			},
@@ -932,7 +901,6 @@ export async function assessCandidateCaching(
 		if (trackerMismatch) {
 			if (
 				await canRecordPrivateCollision(
-					candidate.indexerId,
 					metaOrCandidate instanceof Metafile
 						? metaOrCandidate
 						: null,
@@ -943,17 +911,17 @@ export async function assessCandidateCaching(
 					},
 				)
 			) {
-				await upsertCandidateRecord(
+				await upsertCollisionRecord(
 					cacheEntry.id,
 					trackerMismatch,
 					cacheEntry.firstSeen ?? Date.now(),
 					Date.now(),
 				);
 			} else {
-				await deleteCandidateRecord(cacheEntry.id);
+				await deleteCollisionRecord(cacheEntry.id);
 			}
 		} else {
-			await deleteCandidateRecord(cacheEntry.id);
+			await deleteCollisionRecord(cacheEntry.id);
 		}
 	} else {
 		assessment = await assessAndSaveResults(
