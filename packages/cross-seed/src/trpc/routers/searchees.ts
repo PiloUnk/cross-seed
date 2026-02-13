@@ -232,6 +232,7 @@ export const searcheesRouter = router({
 						.min(1)
 						.max(300)
 						.optional(),
+					privateOnly: z.boolean().optional().default(false),
 				})
 				.default({
 					limit: DEFAULT_CANDIDATE_LIMIT,
@@ -246,6 +247,7 @@ export const searcheesRouter = router({
 				includeKnownTrackers,
 				candidateTracker,
 				currentTracker,
+				privateOnly,
 			} = input;
 
 			const escapeLikeValue = (value: string) =>
@@ -272,6 +274,17 @@ export const searcheesRouter = router({
 				query = query.whereRaw(
 					"collisions.known_trackers like ? escape '\\'",
 					[buildLikePattern(currentTracker)],
+				);
+			}
+
+			if (privateOnly) {
+				query = query.whereExists(
+					db("client_searchee")
+						.select(1)
+						.whereRaw(
+							"client_searchee.info_hash = decision.info_hash",
+						)
+						.where("client_searchee.private", 1),
 				);
 			}
 

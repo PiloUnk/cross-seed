@@ -20,6 +20,7 @@ import candidatesTimestamps from "./18-candidates-timestamps.js";
 import collisions from "./19-collisions.js";
 import indexerPrivacy from "./20-indexer-privacy.js";
 import dropIndexerPrivacy from "./21-drop-indexer-privacy.js";
+import clientSearcheePrivate from "./22-client-searchee-private.js";
 
 export const migrations = {
 	getMigrations: () =>
@@ -46,6 +47,7 @@ export const migrations = {
 			collisions,
 			indexerPrivacy,
 			dropIndexerPrivacy,
+			clientSearcheePrivate,
 		]),
 	getMigrationName: (migration) => migration.name,
 	getMigration: (migration) => migration,

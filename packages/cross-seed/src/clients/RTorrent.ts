@@ -609,6 +609,10 @@ export default class RTorrent implements TorrentClient {
 								params: [hash],
 							},
 							{
+								methodName: "d.is_private",
+								params: [hash],
+							},
+							{
 								methodName: "d.custom1",
 								params: [hash],
 							},
@@ -668,7 +672,8 @@ export default class RTorrent implements TorrentClient {
 			const name: string = results[i * numMethods][0];
 			const directory: string = results[i * numMethods + 2][0];
 			const isMultiFile = Boolean(Number(results[i * numMethods + 3][0]));
-			const labels: string = results[i * numMethods + 4][0];
+			const isPrivate = Boolean(Number(results[i * numMethods + 4][0]));
+			const labels: string = results[i * numMethods + 5][0];
 			const savePath = isMultiFile ? dirname(directory) : directory;
 			const tags = labels.length
 				? decodeURIComponent(labels)
@@ -682,6 +687,7 @@ export default class RTorrent implements TorrentClient {
 				savePath,
 				{
 					tags,
+					private: isPrivate,
 				},
 			);
 			const refresh =
@@ -697,7 +703,7 @@ export default class RTorrent implements TorrentClient {
 				continue;
 			}
 			const length = Number(results[i * numMethods + 1][0]);
-			const files: File[] = results[i * numMethods + 5][0].map((arr) => ({
+			const files: File[] = results[i * numMethods + 6][0].map((arr) => ({
 				name: basename(arr[0]),
 				path: isMultiFile ? join(basename(directory), arr[0]) : arr[0],
 				length: Number(arr[1]),
@@ -710,7 +716,7 @@ export default class RTorrent implements TorrentClient {
 				continue;
 			}
 			const trackers = organizeTrackers(
-				results[i * numMethods + 6][0].map((arr) => ({
+				results[i * numMethods + 7][0].map((arr) => ({
 					url: arr[0],
 					tier: Number(arr[1]),
 				})),
@@ -726,6 +732,7 @@ export default class RTorrent implements TorrentClient {
 				savePath,
 				tags,
 				trackers,
+				private: isPrivate,
 			};
 			newSearchees.push(searchee);
 			searchees.push(searchee);

@@ -60,6 +60,7 @@ interface TorrentGetResponseArgs {
 		totalSize: number;
 		labels: string[];
 		downloadDir: string;
+		isPrivate?: boolean;
 		files: { name: string; length: number; bytesCompleted: number }[];
 		trackers: { announce: string; tier: number }[];
 		leftUntilDone: number;
@@ -352,6 +353,7 @@ export default class Transmission implements TorrentClient {
 						"downloadDir",
 						"labels",
 						"trackers",
+						"isPrivate",
 					],
 				})
 			).torrents;
@@ -380,6 +382,7 @@ export default class Transmission implements TorrentClient {
 			const { name } = torrent;
 			const savePath = torrent.downloadDir;
 			const tags = torrent.labels;
+			const isPrivate = torrent.isPrivate;
 			const modified = clientSearcheeModified(
 				this.label,
 				dbTorrent,
@@ -387,6 +390,7 @@ export default class Transmission implements TorrentClient {
 				savePath,
 				{
 					tags,
+					private: isPrivate,
 				},
 			);
 			const refresh =
@@ -431,6 +435,7 @@ export default class Transmission implements TorrentClient {
 				savePath,
 				tags,
 				trackers,
+				private: isPrivate,
 			};
 			newSearchees.push(searchee);
 			searchees.push(searchee);

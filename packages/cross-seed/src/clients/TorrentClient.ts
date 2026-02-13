@@ -197,12 +197,19 @@ export function clientSearcheeModified(
 	dbTorrent,
 	name: string,
 	savePath: string,
-	options: { category?: string; tags?: string[] } = {},
+	options: { category?: string; tags?: string[]; private?: boolean } = {},
 ): boolean {
 	if (!dbTorrent) return true;
 	if (dbTorrent.name !== name) return true;
 	if (dbTorrent.save_path !== savePath) return true;
 	if ((dbTorrent.category ?? undefined) !== options.category) return true;
+	if (options.private !== undefined) {
+		const dbPrivate =
+			dbTorrent.private === null || dbTorrent.private === undefined
+				? undefined
+				: Boolean(dbTorrent.private);
+		if (dbPrivate !== options.private) return true;
+	}
 	if (
 		!isDeepStrictEqual(
 			dbTorrent.tags ? JSON.parse(dbTorrent.tags) : [],

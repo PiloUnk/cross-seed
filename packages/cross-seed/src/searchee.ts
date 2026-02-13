@@ -96,6 +96,7 @@ export interface Searchee {
 	category?: string;
 	tags?: string[];
 	trackers?: string[];
+	private?: boolean;
 	label?: SearcheeLabel;
 }
 
@@ -413,6 +414,7 @@ export async function updateSearcheeClientDB(
 			category: searchee.category ?? null,
 			tags: searchee.tags ? JSON.stringify(searchee.tags) : null,
 			trackers: JSON.stringify(searchee.trackers),
+			private: searchee.private === undefined ? null : searchee.private,
 		})),
 		async (batch) => {
 			await db("client_searchee")
@@ -435,6 +437,10 @@ export function createSearcheeFromDB(dbTorrent): SearcheeClient {
 		category: dbTorrent.category ?? undefined,
 		tags: dbTorrent.tags ? JSON.parse(dbTorrent.tags) : undefined,
 		trackers: JSON.parse(dbTorrent.trackers),
+		private:
+			dbTorrent.private === null || dbTorrent.private === undefined
+				? undefined
+				: Boolean(dbTorrent.private),
 	};
 }
 
