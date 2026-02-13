@@ -1,9 +1,9 @@
 import ms from "ms";
-import { Action } from "./constants.js";
+import { Action, Decision } from "./constants.js";
 import { cleanupDB, db } from "./db.js";
 import { injectSavedTorrents } from "./inject.js";
 import { Label, logger, exitOnCrossSeedErrors } from "./logger.js";
-import { bulkSearch, scanRssFeeds } from "./pipeline.js";
+import { bulkSearch, bulkSearchByNames, scanRssFeeds } from "./pipeline.js";
 import { getRuntimeConfig, RuntimeConfig } from "./runtimeConfig.js";
 import { updateCaps } from "./torznab.js";
 import { humanReadableDate, Mutex, withMutex } from "./utils.js";
@@ -14,6 +14,7 @@ export enum JobName {
 	UPDATE_INDEXER_CAPS = "updateIndexerCaps",
 	INJECT = "inject",
 	CLEANUP = "cleanup",
+	COLLISION_RECHECK = "collisionRecheck",
 }
 
 const jobs: Job[] = [];
@@ -97,6 +98,14 @@ function createJobs(): void {
 		jobs.push(new Job(JobName.INJECT, ms("1 hour"), injectSavedTorrents));
 	}
 	jobs.push(new Job(JobName.CLEANUP, ms("1 day"), cleanupDB));
+	jobs.push(
+		new Job(
+			JobName.COLLISION_RECHECK,
+			ms("1 hour"),
+			checkResolvedCollisions,
+			() => getRuntimeConfig().useClientTorrents,
+		),
+	);
 }
 
 export function getJobs(): Job[] {
@@ -123,6 +132,59 @@ function logNextRun(
 	logger.info({
 		label: Label.SCHEDULER,
 		message: `${name}: last run ${lastRunStr}, next run ${nextRunStr}`,
+	});
+}
+
+async function checkResolvedCollisions(): Promise<void> {
+	logger.verbose({
+		label: Label.SCHEDULER,
+		message: "Checking for resolved collisions...",
+	});
+	const rows: {
+		decision_id: number;
+		info_hash: string | null;
+		searchee_name: string | null;
+	}[] = await db("collisions")
+		.join("decision", "collisions.decision_id", "decision.id")
+		.leftJoin("searchee", "decision.searchee_id", "searchee.id")
+		.leftJoin(
+			"client_searchee",
+			"decision.info_hash",
+			"client_searchee.info_hash",
+		)
+		.where(
+			"decision.decision",
+			Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER,
+		)
+		.whereNull("client_searchee.info_hash")
+		.select({
+			decision_id: "collisions.decision_id",
+			info_hash: "decision.info_hash",
+			searchee_name: "searchee.name",
+		});
+
+	if (!rows.length) return;
+
+	const decisionIds = Array.from(new Set(rows.map((row) => row.decision_id)));
+	const searcheeNames = Array.from(
+		new Set(
+			rows
+				.map((row) => row.searchee_name)
+				.filter((name): name is string => Boolean(name)),
+		),
+	);
+
+	await db("collisions").whereIn("decision_id", decisionIds).del();
+
+	if (!searcheeNames.length) return;
+
+	const { attempted, requested, totalFound } = await bulkSearchByNames(
+		searcheeNames,
+		{ configOverride: { excludeRecentSearch: 1 } },
+	);
+	logger.info({
+		label: Label.SEARCH,
+		message: `Collision recheck: searched ${attempted}/${requested}, found ${totalFound}`,
 	});
 }
 
@@ -156,8 +218,17 @@ export async function checkJobs(
 					if (jobs.find((j) => j.name === JobName.RSS)?.isActive) {
 						continue;
 					}
-					if (job.name === JobName.CLEANUP) {
-						if (jobs.some((j) => j.isActive)) continue;
+					if (
+						job.name === JobName.CLEANUP ||
+						job.name === JobName.COLLISION_RECHECK
+					) {
+						if (jobs.some((j) => j.isActive)) {
+							logger.verbose({
+								label: Label.SCHEDULER,
+								message: `skipping job ${job.name}: another job is active`,
+							});
+							continue;
+						}
 					}
 				}
 
