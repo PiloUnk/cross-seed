@@ -32,6 +32,8 @@ import {
   ChevronsRight,
   RotateCcw,
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 export const Route = createFileRoute('/collisions')({
   component: CollisionsPage,
@@ -43,6 +45,7 @@ function CollisionsPage() {
   const trpc = useTRPC();
   const [page, setPage] = useState(0);
   const [showClient, setShowClient] = useState(false);
+  const [privateOnly, setPrivateOnly] = useState(false);
   const [candidateTrackerFilter, setCandidateTrackerFilter] = useState('all');
   const [currentTrackerFilter, setCurrentTrackerFilter] = useState('all');
 
@@ -62,8 +65,9 @@ function CollisionsPage() {
       includeKnownTrackers: true,
       candidateTracker: candidateFilterValue,
       currentTracker: currentFilterValue,
+      privateOnly,
     }),
-    [page, candidateFilterValue, currentFilterValue],
+    [page, candidateFilterValue, currentFilterValue, privateOnly],
   );
 
   const query = useSuspenseQuery(
@@ -85,7 +89,7 @@ function CollisionsPage() {
 
   useEffect(() => {
     setPage(0);
-  }, [candidateTrackerFilter, currentTrackerFilter]);
+  }, [candidateTrackerFilter, currentTrackerFilter, privateOnly]);
 
   const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
   const canGoPrev = page > 0;
@@ -110,6 +114,12 @@ function CollisionsPage() {
         </div>
         <div className="bg-muted/30 text-muted-foreground flex flex-col gap-3 rounded-lg border px-3 py-2 text-sm lg:flex-row lg:items-center lg:gap-4">
           <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Label className="text-sm font-medium">
+                Only private torrents
+              </Label>
+              <Switch checked={privateOnly} onCheckedChange={setPrivateOnly} />
+            </div>
             <Tooltip>
               <TooltipTrigger asChild>
                 <span>

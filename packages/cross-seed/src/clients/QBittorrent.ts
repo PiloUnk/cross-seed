@@ -786,6 +786,7 @@ export default class QBittorrent implements TorrentClient {
 						.map((tag) => tag.trim())
 						.filter((tag) => tag.length)
 				: [];
+			const isPrivate = torrent.private;
 			const modified = clientSearcheeModified(
 				this.label,
 				dbTorrent,
@@ -794,6 +795,7 @@ export default class QBittorrent implements TorrentClient {
 				{
 					category,
 					tags,
+					private: isPrivate,
 				},
 			);
 			const refresh =
@@ -848,6 +850,7 @@ export default class QBittorrent implements TorrentClient {
 				category,
 				tags,
 				trackers,
+				private: isPrivate,
 			};
 			newSearchees.push(searchee);
 			searchees.push(searchee);
