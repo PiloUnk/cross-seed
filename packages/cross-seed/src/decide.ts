@@ -368,6 +368,7 @@ async function resolveConflictRules(
 			label: Label.DECIDE,
 			message: `${chalk.yellow("Removed existing torrent")} ${chalk.magenta(searcheeName)} [${sanitizeInfoHash(infoHash)}] seeding on tracker ${chalk.yellow(existingLabel)} based on conflict rules for ${chalk.green(candidateLabel)}`,
 		});
+		await triggerImmediateReseach(searcheeName);
 	} else {
 		logger.warn({
 			label: Label.DECIDE,
@@ -375,6 +376,51 @@ async function resolveConflictRules(
 		});
 	}
 	return removed;
+}
+
+const immediateReseachTimestamps = new Map<string, number>();
+const immediateReseachTtlMs = ms("10 minutes");
+
+function shouldTriggerImmediateReseach(searcheeName: string): boolean {
+	const now = Date.now();
+	for (const [name, timestamp] of immediateReseachTimestamps) {
+		if (now - timestamp > immediateReseachTtlMs) {
+			immediateReseachTimestamps.delete(name);
+		}
+	}
+	const lastTriggered = immediateReseachTimestamps.get(searcheeName);
+	if (lastTriggered && now - lastTriggered < immediateReseachTtlMs) {
+		return false;
+	}
+	immediateReseachTimestamps.set(searcheeName, now);
+	return true;
+}
+
+async function triggerImmediateReseach(searcheeName: string): Promise<void> {
+	if (!shouldTriggerImmediateReseach(searcheeName)) {
+		logger.verbose({
+			label: Label.SEARCH,
+			message: `Conflict rule removal: re-search already triggered recently for ${chalk.magenta(searcheeName)}`,
+		});
+		return;
+	}
+	try {
+		const { bulkSearchByNames } = await import("./pipeline.js");
+		logger.info({
+			label: Label.SEARCH,
+			message: `Conflict rule removal: triggering immediate re-search for ${chalk.magenta(searcheeName)}`,
+		});
+		await bulkSearchByNames([searcheeName], {
+			configOverride: { excludeRecentSearch: 1 },
+		});
+	} catch (error) {
+		const err = error as Error;
+		logger.warn({
+			label: Label.SEARCH,
+			message: `Conflict rule removal: immediate re-search failed for ${searcheeName}: ${err.message ?? String(error)}`,
+		});
+		logger.debug(error);
+	}
 }
 
 export async function resolveConflictRulesForCollision(
