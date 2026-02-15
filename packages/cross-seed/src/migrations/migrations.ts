@@ -21,6 +21,7 @@ import collisions from "./19-collisions.js";
 import indexerPrivacy from "./20-indexer-privacy.js";
 import dropIndexerPrivacy from "./21-drop-indexer-privacy.js";
 import clientSearcheePrivate from "./22-client-searchee-private.js";
+import conflictRules from "./23-conflict-rules.js";
 
 export const migrations = {
 	getMigrations: () =>
@@ -48,6 +49,7 @@ export const migrations = {
 			indexerPrivacy,
 			dropIndexerPrivacy,
 			clientSearcheePrivate,
+			conflictRules,
 		]),
 	getMigrationName: (migration) => migration.name,
 	getMigration: (migration) => migration,
