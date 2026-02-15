@@ -504,7 +504,15 @@ export async function assessCandidate(
 	}
 
 	if (searchee.infoHash === metafile.infoHash) {
-		return { decision: Decision.SAME_INFO_HASH, metafile, metaCached };
+		const trackerMismatch = await logAnnounceMismatch(metafile);
+		return {
+			decision: trackerMismatch
+				? Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER
+				: Decision.SAME_INFO_HASH,
+			metafile,
+			metaCached,
+			trackerMismatch: trackerMismatch ?? undefined,
+		};
 	}
 
 	if (infoHashesToExclude.has(metafile.infoHash)) {
