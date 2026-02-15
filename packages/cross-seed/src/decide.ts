@@ -110,6 +110,42 @@ async function upsertCollisionRecord(
 		last_seen: lastSeen,
 		updated_at: Date.now(),
 	};
+	const decisionRow = await dbOrTrx("decision")
+		.select("info_hash", "searchee_id")
+		.where({ id: decisionId })
+		.first();
+	if (decisionRow?.info_hash && decisionRow?.searchee_id) {
+		const searcheeRow = await dbOrTrx("searchee")
+			.select("name")
+			.where({ id: decisionRow.searchee_id })
+			.first();
+		if (searcheeRow?.name) {
+			const existing = await dbOrTrx("collisions")
+				.join("decision", "collisions.decision_id", "decision.id")
+				.join("searchee", "decision.searchee_id", "searchee.id")
+				.where({
+					"decision.info_hash": decisionRow.info_hash,
+					"searchee.name": searcheeRow.name,
+					"collisions.candidate_trackers": payload.candidate_trackers,
+					"collisions.known_trackers": payload.known_trackers,
+				})
+				.whereNot("collisions.decision_id", decisionId)
+				.select({ decisionId: "collisions.decision_id" })
+				.first();
+			if (existing?.decisionId) {
+				await dbOrTrx("collisions")
+					.where({ decision_id: existing.decisionId })
+					.update({
+						last_seen: payload.last_seen,
+						updated_at: payload.updated_at,
+					});
+				await dbOrTrx("collisions")
+					.where({ decision_id: decisionId })
+					.del();
+				return;
+			}
+		}
+	}
 	await dbOrTrx("collisions")
 		.insert(payload)
 		.onConflict("decision_id")

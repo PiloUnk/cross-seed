@@ -42,6 +42,7 @@ cache.json
 docker-compose.yml
 utils.zsh
 test.db
+*.db
 .tool-versions
 coverage/
 .vscode/
