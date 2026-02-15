@@ -368,6 +368,7 @@ async function resolveConflictRules(
 			label: Label.DECIDE,
 			message: `${chalk.yellow("Removed existing torrent")} ${chalk.magenta(searcheeName)} [${sanitizeInfoHash(infoHash)}] seeding on tracker ${chalk.yellow(existingLabel)} based on conflict rules for ${chalk.green(candidateLabel)}`,
 		});
+		await cleanupCollisionRecords(infoHash, searcheeName);
 		await triggerImmediateReseach(searcheeName);
 	} else {
 		logger.warn({
@@ -376,6 +377,24 @@ async function resolveConflictRules(
 		});
 	}
 	return removed;
+}
+
+async function cleanupCollisionRecords(
+	infoHash: string,
+	searcheeName: string,
+): Promise<void> {
+	const decisionRows: { id: number }[] = await db("decision")
+		.join("searchee", "decision.searchee_id", "searchee.id")
+		.where("decision.info_hash", infoHash)
+		.andWhere("searchee.name", searcheeName)
+		.select("decision.id");
+	if (!decisionRows.length) return;
+	const decisionIds = decisionRows.map((row) => row.id);
+	await db("collisions").whereIn("decision_id", decisionIds).del();
+	logger.verbose({
+		label: Label.DECIDE,
+		message: `Cleared collision records for ${chalk.magenta(searcheeName)} [${sanitizeInfoHash(infoHash)}]`,
+	});
 }
 
 const immediateReseachTimestamps = new Map<string, number>();
