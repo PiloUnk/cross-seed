@@ -1,43 +1,70 @@
-# cross-seed: Fully-automatic cross-seeding
+# cross-seed fork with info hash collision handling
 
-`cross-seed` is an app designed to help you download torrents that you can cross
-seed based on your existing torrents. It is designed to match conservatively to
-minimize manual intervention.
+This is a fork of cross-seed: https://github.com/cross-seed/cross-seed/
 
-## Requirements
+Based on the cross-seed v7 pre-release (includes the Web UI).
 
-- [Node >= 24](https://nodejs.org/en/download)
-- Any indexers that support Torznab (through Prowlarr or Jackett)
-- At least one torrent client: rTorrent, qBittorrent, Deluge, or Transmission
+<div style="border: 2px solid #d32f2f; padding: 12px; border-radius: 6px;">
+	<strong>Note:</strong> This fork changes the database schema and behavior. Before installing or
+	upgrading, make a backup of <code>cross-seed.db</code>. If you ever want to return
+	to the stock version, you will need that backup.
+</div>
 
-## Tutorial
+## Why this fork
 
-Head on over to
-[cross-seed.org](https://www.cross-seed.org/docs/basics/getting-started) to get
-started.
+This fork exists to handle info hash collisions. An info hash collision happens
+when two different torrents share the same `info_hash`. In that case, cross-seed
+detects a duplicate and refuses to inject, which blocks cross-seeding even when
+the torrent comes from another tracker.
 
-## Troubleshooting
+In such a situation, it is not viable to inject a second announce for the same
+torrent (often rejected by private trackers). It is also risky to rely on a
+second client to work around the issue in case of file corruption. This fork
+adds conflict rules to handle these collisions properly.
 
-Feel free to
-[start a discussion](https://github.com/cross-seed/cross-seed/discussions/new),
-or reach out on [Discord](https://discord.gg/jpbUFzS5Wb).
+## Features
 
-## Releases and Branches
+- Detects collisions by identifying tracker differences between the candidate
+  and the seeding torrent
+- Defines rules to replace a conflicting torrent by setting tracker priorities
 
-cross-seed roughly follows semantic versioning. Every release has a
-corresponding git tag. Git branches do not represent released code.
+### Collisions view
 
-Versions that look like v0.0.0 are _releases_ and are considered stable.
-Versions that look like v0.0.0*-0* are _prereleases_ and are not considered
-stable.
+![Collisions view](images/collisions.png)
 
-We also publish Docker images at `ghcr.io/cross-seed/cross-seed` under several
-tag patterns: `:branch`, `:6`, `latest`.
+By default, if there are no Conflicting Rules, collisions are surfaced in the
+Collisions view for manual handling. It is possible to report the issue to the
+trackers involved or remove the conflicting torrents from the BitTorrent client
+manually.
 
-- `latest` - the most recent _release_.
-- `prerelease` - the most recent _release_ or _prerelease_.
-- `master` - The main development branch. Code that is intended for release, but
-  has not necessarily released yet. This is similar to `prerelease` but gets new
-  code first so is slightly more bleeding edge.
-- `nightly` - for open experimental PRs. Not always used and may fall behind
-  master.
+The `Collision Recheck` job regularly verifies whether a conflicting torrent has
+been removed from the BitTorrent client, allowing the conflicting candidate to
+be injected.
+
+### Conflicting Rules
+
+![Conflicting Rules view](images/conflicting-rules.png)
+
+By default, this feature is disabled.
+
+Conflicting Rules allow tracker priority to be defined to solve collisions
+automatically. This is a way to promote seeding on prefered trackers for
+whatever reason. When rules apply, conflicting torrent of a lower priority
+tracker is removed from the bittorrent client without deleting the data and
+elected candidates is injected as replacement.
+
+> **Note:** The `All indexer trackers` rule only covers active indexers from the
+> Trackers Settings page. If an indexer is temporarily down, it will be treated
+> as a third-party tracker. When configuring rules, explicitly select all
+> desired trackers to avoid unwanted torrent replacement.
+
+## Docker image
+
+A multiarch AMD64/ARM64 image is available at:
+
+`ghcr.io/pilounk/cross-seed:collisions`
+
+## Documentation
+
+For configuration, usage, and the rest of the setup, refer to the upstream
+cross-seed documentation.
