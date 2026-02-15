@@ -8,6 +8,7 @@ import { getRuntimeConfig, RuntimeConfig } from "./runtimeConfig.js";
 import { indexTorrentsAndDataDirs } from "./torrent.js";
 import { updateCaps } from "./torznab.js";
 import { humanReadableDate, Mutex, withMutex } from "./utils.js";
+import { resolveConflictRulesForCollision } from "./decide.js";
 
 export enum JobName {
 	RSS = "rss",
@@ -142,6 +143,36 @@ async function checkResolvedCollisions(): Promise<void> {
 		message: "Checking for resolved collisions...",
 	});
 	await indexTorrentsAndDataDirs();
+	const collisionCandidates: {
+		decision_id: number;
+		info_hash: string | null;
+		searchee_name: string | null;
+		candidate_trackers: string | null;
+	}[] = await db("collisions")
+		.join("decision", "collisions.decision_id", "decision.id")
+		.leftJoin("searchee", "decision.searchee_id", "searchee.id")
+		.where(
+			"decision.decision",
+			Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER,
+		)
+		.select({
+			decision_id: "collisions.decision_id",
+			info_hash: "decision.info_hash",
+			searchee_name: "searchee.name",
+			candidate_trackers: "collisions.candidate_trackers",
+		});
+
+	for (const row of collisionCandidates) {
+		if (!row.info_hash || !row.searchee_name) continue;
+		const candidateTrackers = parseTrackersJson(row.candidate_trackers);
+		if (!candidateTrackers.length) continue;
+		await resolveConflictRulesForCollision(
+			row.info_hash,
+			candidateTrackers,
+			row.searchee_name,
+		);
+	}
+
 	const rows: {
 		decision_id: number;
 		info_hash: string | null;
@@ -188,6 +219,17 @@ async function checkResolvedCollisions(): Promise<void> {
 		label: Label.SEARCH,
 		message: `Collision recheck: searched ${attempted}/${requested}, found ${totalFound}`,
 	});
+}
+
+function parseTrackersJson(value: string | null): string[] {
+	if (!value) return [];
+	try {
+		const parsed = JSON.parse(value);
+		if (!Array.isArray(parsed)) return [];
+		return parsed.filter((item) => typeof item === "string");
+	} catch {
+		return [];
+	}
 }
 
 export async function getJobLastRun(

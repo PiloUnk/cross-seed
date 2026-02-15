@@ -377,6 +377,14 @@ async function resolveConflictRules(
 	return removed;
 }
 
+export async function resolveConflictRulesForCollision(
+	infoHash: string,
+	candidateTrackers: string[],
+	searcheeName: string,
+): Promise<boolean> {
+	return resolveConflictRules(infoHash, candidateTrackers, searcheeName);
+}
+
 function trackersAreEqual(a: string[], b: string[]): boolean {
 	if (a.length !== b.length) return false;
 	return a.every((value, index) => value === b[index]);
