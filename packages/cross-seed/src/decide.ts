@@ -51,6 +51,7 @@ import {
 	stripExtension,
 	withMutex,
 } from "./utils.js";
+import { getClients } from "./clients/TorrentClient.js";
 
 export interface ResultAssessment {
 	decision: Decision;
@@ -64,6 +65,12 @@ interface TrackerMismatchInfo {
 	knownTrackers: string[];
 }
 
+type ConflictRuleRow = {
+	priority: number;
+	all_indexers: number | boolean | null;
+	trackers: string | null;
+};
+
 function getTorrentPrivateFlag(meta: Metafile | null): boolean | null {
 	if (!meta) return null;
 	const flag = meta.raw?.info?.private;
@@ -71,7 +78,6 @@ function getTorrentPrivateFlag(meta: Metafile | null): boolean | null {
 	if (flag === 0) return false;
 	return null;
 }
-
 async function canRecordPrivateCollision(
 	candidateMetafile: Metafile | null,
 	context?: {
@@ -171,6 +177,212 @@ function normalizeTrackers(trackers: string[] | undefined): string[] {
 			(trackers ?? []).map((tracker) => tracker.trim()).filter(Boolean),
 		),
 	).sort();
+}
+
+function normalizeTrackerKey(value: string): string {
+	return value.trim().toLowerCase();
+}
+
+function parseTrackersJson(value: string | null): string[] {
+	if (!value) return [];
+	try {
+		const parsed = JSON.parse(value);
+		if (!Array.isArray(parsed)) return [];
+		return parsed.filter((item) => typeof item === "string");
+	} catch {
+		return [];
+	}
+}
+
+async function getIndexerTrackerSet(): Promise<Set<string>> {
+	const rows: { trackers: string | null }[] =
+		await db("indexer").select("trackers");
+	const trackerSet = new Set<string>();
+	for (const row of rows) {
+		for (const tracker of parseTrackersJson(row.trackers)) {
+			trackerSet.add(normalizeTrackerKey(tracker));
+		}
+	}
+	return trackerSet;
+}
+
+async function getConflictRules() {
+	const rows: ConflictRuleRow[] = await db("conflict_rules")
+		.select("priority", "all_indexers", "trackers")
+		.orderBy("priority", "asc");
+	return rows.map((row) => ({
+		priority: row.priority,
+		allIndexers: Boolean(row.all_indexers),
+		trackers: normalizeTrackers(parseTrackersJson(row.trackers)),
+	}));
+}
+
+function getTrackerPriority(
+	tracker: string,
+	rules: { allIndexers: boolean; trackers: string[] }[],
+	indexerTrackers: Set<string>,
+): number | null {
+	const normalized = normalizeTrackerKey(tracker);
+	for (let i = 0; i < rules.length; i += 1) {
+		const rule = rules[i];
+		if (rule.allIndexers && indexerTrackers.has(normalized)) return i;
+		if (rule.trackers.some((t) => normalizeTrackerKey(t) === normalized)) {
+			return i;
+		}
+	}
+	return null;
+}
+
+function getBestTrackerPriority(
+	trackers: string[],
+	rules: { allIndexers: boolean; trackers: string[] }[],
+	indexerTrackers: Set<string>,
+): number | null {
+	let bestPriority = Number.POSITIVE_INFINITY;
+	for (const tracker of trackers) {
+		const priority = getTrackerPriority(tracker, rules, indexerTrackers);
+		if (priority === null) continue;
+		bestPriority = Math.min(bestPriority, priority);
+	}
+	return bestPriority === Number.POSITIVE_INFINITY ? null : bestPriority;
+}
+
+async function removeTorrentFromClients(
+	infoHash: string,
+	searcheeName: string,
+): Promise<boolean> {
+	const rows: { client_host: string | null }[] = await db("client_searchee")
+		.select("client_host")
+		.where({ info_hash: infoHash });
+	if (!rows.length) return false;
+	const clients = getClients();
+	logger.verbose({
+		label: Label.DECIDE,
+		message: `${chalk.yellow("Attempting to remove existing torrent")} ${chalk.magenta(searcheeName)} [${sanitizeInfoHash(infoHash)}] from ${rows.length} client(s)`,
+	});
+	for (const row of rows) {
+		if (!row.client_host) return false;
+		const client = clients.find((c) => c.clientHost === row.client_host);
+		if (!client) return false;
+		logger.verbose({
+			label: Label.DECIDE,
+			message: `${chalk.yellow("Removing torrent")} ${chalk.magenta(searcheeName)} [${sanitizeInfoHash(infoHash)}] from ${client.label}`,
+		});
+		const removeRes = await client.removeTorrent(infoHash, {
+			deleteData: false,
+		});
+		if (removeRes.isErr() || !removeRes.unwrap()) {
+			const errMessage = removeRes.isErr()
+				? removeRes.unwrapErr().message
+				: "client returned false";
+			logger.verbose({
+				label: Label.DECIDE,
+				message: `Failed to remove torrent ${searcheeName} [${sanitizeInfoHash(infoHash)}] from ${client.label}: ${errMessage}`,
+			});
+			return false;
+		}
+		const exists = await client.isTorrentInClient(infoHash);
+		if (exists.isErr() || exists.unwrap()) {
+			const errMessage = exists.isErr()
+				? exists.unwrapErr().message
+				: "torrent still present";
+			logger.verbose({
+				label: Label.DECIDE,
+				message: `Removal verification failed for ${searcheeName} [${sanitizeInfoHash(infoHash)}] on ${client.label}: ${errMessage}`,
+			});
+			return false;
+		}
+		await db("client_searchee")
+			.where({ info_hash: infoHash, client_host: row.client_host })
+			.del();
+		logger.verbose({
+			label: Label.DECIDE,
+			message: `Removed torrent ${searcheeName} [${sanitizeInfoHash(infoHash)}] from ${client.label}`,
+		});
+	}
+	return true;
+}
+
+async function resolveConflictRules(
+	infoHash: string,
+	candidateTrackers: string[],
+	searcheeName: string,
+): Promise<boolean> {
+	const rules = await getConflictRules();
+	if (!rules.length) {
+		logger.verbose({
+			label: Label.DECIDE,
+			message: `No conflict rules found for ${searcheeName} [${sanitizeInfoHash(infoHash)}]`,
+		});
+		return false;
+	}
+	const indexerTrackers = await getIndexerTrackerSet();
+	const candidatePriority = getBestTrackerPriority(
+		candidateTrackers,
+		rules,
+		indexerTrackers,
+	);
+	if (candidatePriority === null) {
+		logger.verbose({
+			label: Label.DECIDE,
+			message: `Conflict rules: candidate [${candidateTrackers.join(", ")}] has no priority for ${searcheeName} [${sanitizeInfoHash(infoHash)}]`,
+		});
+		return false;
+	}
+	const rows: { trackers: string | null }[] = await db("client_searchee")
+		.select("trackers")
+		.where({ info_hash: infoHash });
+	if (!rows.length) return false;
+	const existingTrackers = rows.flatMap((row) =>
+		parseTrackersJson(row.trackers),
+	);
+	const matchedExistingPriority = getBestTrackerPriority(
+		existingTrackers,
+		rules,
+		indexerTrackers,
+	);
+	const bestExistingPriority =
+		matchedExistingPriority === null
+			? rules.length
+			: matchedExistingPriority;
+	if (candidatePriority >= bestExistingPriority) {
+		logger.verbose({
+			label: Label.DECIDE,
+			message: `Conflict rules: candidate [${candidateTrackers.join(", ")}] (priority ${candidatePriority}) does not outrank current [${existingTrackers.join(", ")}] (priority ${bestExistingPriority}) for ${searcheeName} [${sanitizeInfoHash(infoHash)}]`,
+		});
+		return false;
+	}
+	logger.verbose({
+		label: Label.DECIDE,
+		message: `Conflict rules: candidate [${candidateTrackers.join(", ")}] (priority ${candidatePriority}) outranks current [${existingTrackers.join(", ")}] (priority ${bestExistingPriority}) for ${searcheeName} [${sanitizeInfoHash(infoHash)}]`,
+	});
+	const removed = await removeTorrentFromClients(infoHash, searcheeName);
+	const candidateLabel = candidateTrackers.length
+		? candidateTrackers.join(", ")
+		: "unknown";
+	const existingLabel = existingTrackers.length
+		? existingTrackers.join(", ")
+		: "unknown";
+	if (removed) {
+		logger.info({
+			label: Label.DECIDE,
+			message: `${chalk.yellow("Removed existing torrent")} ${chalk.magenta(searcheeName)} [${sanitizeInfoHash(infoHash)}] seeding on tracker ${chalk.yellow(existingLabel)} based on conflict rules for ${chalk.green(candidateLabel)}`,
+		});
+	} else {
+		logger.warn({
+			label: Label.DECIDE,
+			message: `Failed to remove existing torrent ${sanitizeInfoHash(infoHash)} seeding on tracker ${existingLabel} for conflict rules on ${candidateLabel}`,
+		});
+	}
+	return removed;
+}
+
+export async function resolveConflictRulesForCollision(
+	infoHash: string,
+	candidateTrackers: string[],
+	searcheeName: string,
+): Promise<boolean> {
+	return resolveConflictRules(infoHash, candidateTrackers, searcheeName);
 }
 
 function trackersAreEqual(a: string[], b: string[]): boolean {
@@ -470,6 +682,7 @@ export async function assessCandidate(
 	infoHashesToExclude: Set<string>,
 	blockList: string[],
 	options?: { configOverride: Partial<RuntimeConfig> },
+	candidateTracker?: string,
 ): Promise<ResultAssessment> {
 	const { includeSingleEpisodes, matchMode } = getRuntimeConfig(
 		options?.configOverride,
@@ -553,14 +766,31 @@ export async function assessCandidate(
 
 	if (infoHashesToExclude.has(metafile.infoHash)) {
 		const trackerMismatch = await logAnnounceMismatch(metafile);
-		return {
-			decision: trackerMismatch
-				? Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER
-				: Decision.INFO_HASH_ALREADY_EXISTS,
-			metafile,
-			metaCached,
-			trackerMismatch: trackerMismatch ?? undefined,
-		};
+		const candidateTrackers = trackerMismatch?.candidateTrackers.length
+			? trackerMismatch.candidateTrackers
+			: candidateTracker
+				? [candidateTracker]
+				: [];
+		if (candidateTrackers.length) {
+			const resolved = await resolveConflictRules(
+				metafile.infoHash,
+				candidateTrackers,
+				searchee.title,
+			);
+			if (resolved) {
+				infoHashesToExclude.delete(metafile.infoHash);
+			}
+		}
+		if (infoHashesToExclude.has(metafile.infoHash)) {
+			return {
+				decision: trackerMismatch
+					? Decision.INFO_HASH_ALREADY_EXISTS_ANOTHER_TRACKER
+					: Decision.INFO_HASH_ALREADY_EXISTS,
+				metafile,
+				metaCached,
+				trackerMismatch: trackerMismatch ?? undefined,
+			};
+		}
 	}
 
 	if (findBlockedStringInReleaseMaybe(metafile, blockList)) {
@@ -765,6 +995,7 @@ async function assessAndSaveResults(
 	infoHashesToExclude: Set<string>,
 	firstSeen: number,
 	guidInfoHashMap: Map<string, string>,
+	candidateTracker: string,
 	options?: { configOverride: Partial<RuntimeConfig> },
 ) {
 	const { blockList } = getRuntimeConfig(options?.configOverride);
@@ -774,6 +1005,7 @@ async function assessAndSaveResults(
 		infoHashesToExclude,
 		blockList,
 		options,
+		candidateTracker,
 	);
 
 	if (assessment.metaCached && assessment.metafile) {
@@ -925,6 +1157,32 @@ export async function assessCandidateCaching(
 			metaOrCandidate instanceof Metafile
 				? await logAnnounceMismatch(metaOrCandidate)
 				: null;
+		const candidateTrackers = trackerMismatch?.candidateTrackers.length
+			? trackerMismatch.candidateTrackers
+			: tracker
+				? [tracker]
+				: [];
+		if (candidateTrackers.length) {
+			const resolved = await resolveConflictRules(
+				cacheEntry.infoHash,
+				candidateTrackers,
+				searchee.title,
+			);
+			if (resolved) {
+				infoHashesToExclude.delete(cacheEntry.infoHash);
+				assessment = await assessAndSaveResults(
+					metaOrCandidate,
+					searchee,
+					guid,
+					infoHashesToExclude,
+					cacheEntry.firstSeen ?? Date.now(),
+					guidInfoHashMap,
+					tracker,
+					options,
+				);
+				return assessment;
+			}
+		}
 		// Already injected fast path, preserve match decision
 		assessment = {
 			decision: trackerMismatch
@@ -975,6 +1233,7 @@ export async function assessCandidateCaching(
 			infoHashesToExclude,
 			cacheEntry?.firstSeen ?? Date.now(),
 			guidInfoHashMap,
+			tracker,
 			options,
 		);
 	}

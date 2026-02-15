@@ -21,6 +21,7 @@ import {
   Library,
   AlertTriangle,
   Shuffle,
+  ListOrdered,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -78,6 +79,11 @@ const navItems = [
         title: 'Trackers',
         icon: <Popcorn className="size-4" />,
         url: '/settings/trackers',
+      },
+      {
+        title: 'Conflict Rules',
+        icon: <ListOrdered className="size-4" />,
+        url: '/settings/conflict-rules',
       },
       {
         title: 'Torrent Clients',

@@ -45,6 +45,7 @@ type Method =
 	| "torrent-get"
 	| "torrent-stop"
 	| "torrent-verify"
+	| "torrent-remove"
 	| "torrent-start";
 
 interface Response<T> {
@@ -112,7 +113,10 @@ export default class Transmission implements TorrentClient {
 		retries = 1,
 		timeout = 0,
 	): Promise<T> {
-		const msg = `Calling method ${method} with params ${inspect(args, { depth: null, compact: true })}`;
+		const rawMsg = `Calling method ${method} with params ${inspect(args, { depth: null, compact: true })}`;
+		const msg = rawMsg.replace(/[a-f0-9]{40}/gi, (hash) =>
+			sanitizeInfoHash(hash),
+		);
 		const message = msg.length > 1000 ? `${msg.slice(0, 1000)}...` : msg;
 		logger.verbose({ label: this.label, message });
 		const { username, password, href } = extractCredentialsFromUrl(
@@ -452,6 +456,30 @@ export default class Transmission implements TorrentClient {
 		await this.request<void>("torrent-verify", {
 			ids: [infoHash],
 		});
+	}
+
+	async removeTorrent(
+		infoHash: string,
+		_options: { deleteData?: boolean } = {},
+	): Promise<Result<boolean, Error>> {
+		void _options;
+		if (this.readonly) {
+			return resultOfErr(
+				new Error(
+					`[${this.label}] client is readonly; cannot remove torrent`,
+				),
+			);
+		}
+		const deleteData = false;
+		try {
+			await this.request<void>("torrent-remove", {
+				ids: [infoHash],
+				"delete-local-data": deleteData,
+			});
+			return resultOf(true);
+		} catch (error) {
+			return resultOfErr(error as Error);
+		}
 	}
 
 	async resumeInjection(

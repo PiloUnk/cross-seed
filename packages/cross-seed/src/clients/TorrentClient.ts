@@ -106,6 +106,10 @@ export interface TorrentClient {
 		options: { onlyCompleted: boolean; destinationDir?: string },
 	) => Promise<InjectionResult>;
 	recheckTorrent: (infoHash: string) => Promise<void>;
+	removeTorrent: (
+		infoHash: string,
+		options?: { deleteData?: boolean },
+	) => Promise<Result<boolean, Error>>;
 	validateConfig: () => Promise<void>;
 }
 
