@@ -293,7 +293,7 @@ export default class QBittorrent implements TorrentClient {
 		headers: Record<string, string> = {},
 		numRetries = 3,
 	): Promise<string | undefined> {
-		const bodyStr =
+		const rawBodyStr =
 			body instanceof URLSearchParams || body instanceof FormData
 				? JSON.stringify(Object.fromEntries(body))
 				: JSON.stringify(body).replace(
@@ -301,6 +301,9 @@ export default class QBittorrent implements TorrentClient {
 						(match, hash) =>
 							match.replace(hash, sanitizeInfoHash(hash)),
 					);
+		const bodyStr = rawBodyStr.replace(/[a-f0-9]{40}/gi, (hash) =>
+			sanitizeInfoHash(hash),
+		);
 
 		let response: Response | undefined;
 		const retries = Math.max(numRetries, 0);
@@ -545,6 +548,37 @@ export default class QBittorrent implements TorrentClient {
 			`hashes=${infoHash}`,
 			X_WWW_FORM_URLENCODED,
 		);
+	}
+
+	async removeTorrent(
+		infoHash: string,
+		_options: { deleteData?: boolean } = {},
+	): Promise<Result<boolean, Error>> {
+		void _options;
+		void _options;
+		void _options;
+		void _options;
+		if (this.readonly) {
+			return resultOfErr(
+				new Error(
+					`[${this.label}] client is readonly; cannot remove torrent`,
+				),
+			);
+		}
+		const deleteData = false;
+		try {
+			await this.request(
+				"/torrents/delete",
+				new URLSearchParams({
+					hashes: infoHash,
+					deleteFiles: deleteData ? "true" : "false",
+				}),
+				X_WWW_FORM_URLENCODED,
+			);
+			return resultOf(true);
+		} catch (error) {
+			return resultOfErr(error as Error);
+		}
 	}
 
 	/*

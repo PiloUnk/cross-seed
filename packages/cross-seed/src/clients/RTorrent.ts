@@ -151,7 +151,10 @@ export default class RTorrent implements TorrentClient {
 	}
 
 	private async methodCallP<R>(method: string, args): Promise<R> {
-		const msg = `Calling method ${method} with params ${inspect(args, { depth: null, compact: true })}`;
+		const rawMsg = `Calling method ${method} with params ${inspect(args, { depth: null, compact: true })}`;
+		const msg = rawMsg.replace(/[a-f0-9]{40}/gi, (hash) =>
+			sanitizeInfoHash(hash),
+		);
 		const message = msg.length > 1000 ? `${msg.slice(0, 1000)}...` : msg;
 		logger.verbose({ label: this.label, message });
 		return new Promise((resolve, reject) => {
@@ -745,6 +748,29 @@ export default class RTorrent implements TorrentClient {
 		// Pause first as it may resume after recheck automatically
 		await this.methodCallP<void>("d.pause", [infoHash]);
 		await this.methodCallP<void>("d.check_hash", [infoHash]);
+	}
+
+	async removeTorrent(
+		infoHash: string,
+		_options: { deleteData?: boolean } = {},
+	): Promise<Result<boolean, Error>> {
+		void _options;
+		if (this.readonly) {
+			return resultOfErr(
+				new Error(
+					`[${this.label}] client is readonly; cannot remove torrent`,
+				),
+			);
+		}
+		const hash = infoHash.toUpperCase();
+		try {
+			await this.methodCallP<void>("d.stop", [hash]);
+			await this.methodCallP<void>("d.close", [hash]);
+			await this.methodCallP<void>("d.erase", [hash]);
+			return resultOf(true);
+		} catch (error) {
+			return resultOfErr(error as Error);
+		}
 	}
 
 	async resumeInjection(

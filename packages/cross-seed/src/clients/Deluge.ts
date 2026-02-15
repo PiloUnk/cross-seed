@@ -210,7 +210,10 @@ export default class Deluge implements TorrentClient {
 		params: unknown[],
 		retries = 1,
 	): Promise<Result<ResultType, ErrorType>> {
-		const msg = `Calling method ${method} with params ${inspect(params, { depth: null, compact: true })}`;
+		const rawMsg = `Calling method ${method} with params ${inspect(params, { depth: null, compact: true })}`;
+		const msg = rawMsg.replace(/[a-f0-9]{40}/gi, (hash) =>
+			sanitizeInfoHash(hash),
+		);
 		const message = msg.length > 1000 ? `${msg.slice(0, 1000)}...` : msg;
 		logger.verbose({ label: this.label, message });
 		const { href } = extractCredentialsFromUrl(this.url).unwrapOrThrow(
@@ -554,6 +557,28 @@ export default class Deluge implements TorrentClient {
 		// Pause first as it may resume after recheck automatically
 		await this.call<string>("core.pause_torrent", [[infoHash]]);
 		await this.call<string>("core.force_recheck", [[infoHash]]);
+	}
+
+	async removeTorrent(
+		infoHash: string,
+		_options: { deleteData?: boolean } = {},
+	): Promise<Result<boolean, Error>> {
+		void _options;
+		if (this.readonly) {
+			return resultOfErr(
+				new Error(
+					`[${this.label}] client is readonly; cannot remove torrent`,
+				),
+			);
+		}
+		const deleteData = false;
+		const response = await this.call<boolean>("core.remove_torrent", [
+			infoHash,
+			deleteData,
+		]);
+		return response.isOk()
+			? resultOf(response.unwrap())
+			: resultOfErr(new Error(response.unwrapErr().message));
 	}
 
 	/**
