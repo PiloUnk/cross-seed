@@ -5,6 +5,7 @@ import { injectSavedTorrents } from "./inject.js";
 import { Label, logger, exitOnCrossSeedErrors } from "./logger.js";
 import { bulkSearch, bulkSearchByNames, scanRssFeeds } from "./pipeline.js";
 import { getRuntimeConfig, RuntimeConfig } from "./runtimeConfig.js";
+import { indexTorrentsAndDataDirs } from "./torrent.js";
 import { updateCaps } from "./torznab.js";
 import { humanReadableDate, Mutex, withMutex } from "./utils.js";
 
@@ -140,6 +141,7 @@ async function checkResolvedCollisions(): Promise<void> {
 		label: Label.SCHEDULER,
 		message: "Checking for resolved collisions...",
 	});
+	await indexTorrentsAndDataDirs();
 	const rows: {
 		decision_id: number;
 		info_hash: string | null;
