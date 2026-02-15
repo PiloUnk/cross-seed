@@ -4,11 +4,9 @@ This is a fork of cross-seed: https://github.com/cross-seed/cross-seed/
 
 Based on the cross-seed v7 pre-release (includes the Web UI).
 
-<div style="border: 2px solid #d32f2f; padding: 12px; border-radius: 6px;">
-	<strong>Note:</strong> This fork changes the database schema and behavior. Before installing or
-	upgrading, make a backup of <code>cross-seed.db</code>. If you ever want to return
-	to the stock version, you will need that backup.
-</div>
+> **Warning:** This fork changes the database schema and behavior. Before
+> installing or upgrading, make a backup of `cross-seed.db`. If you ever want to
+> return to the stock version, you will need that backup.
 
 ## Why this fork
 
@@ -34,11 +32,11 @@ adds conflict rules to handle these collisions properly.
 
 By default, if there are no Conflicting Rules, collisions are surfaced in the
 Collisions view for manual handling. It is possible to report the issue to the
-trackers involved or remove the conflicting torrents from the BitTorrent client
+trackers involved or remove the conflicting torrents from the Bittorrent client
 manually.
 
 The `Collision Recheck` job regularly verifies whether a conflicting torrent has
-been removed from the BitTorrent client, allowing the conflicting candidate to
+been removed from the Bittorrent client, allowing the conflicting candidate to
 be injected.
 
 ### Conflicting Rules
