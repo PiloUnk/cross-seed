@@ -17,8 +17,10 @@ the torrent comes from another tracker.
 
 In such a situation, it is not viable to inject a second announce for the same
 torrent (often rejected by private trackers). It is also risky to rely on a
-second client to work around the issue in case of file corruption. This fork
-adds conflict rules to handle these collisions properly.
+second client to work around the issue in case of file corruption and private
+trackers may detect that as an abuse.
+
+This fork helps to be aware of conflicting torrents and make action.
 
 ## Features
 
@@ -31,13 +33,13 @@ adds conflict rules to handle these collisions properly.
 ![Collisions view](images/collisions.png)
 
 By default, if there are no Conflicting Rules, collisions are surfaced in the
-Collisions view for manual handling. It is possible to report the issue to the
-trackers involved or remove the conflicting torrents from the Bittorrent client
-manually.
+Collisions view for manual handling. It is then possible to report the issue to
+the trackers involved or remove the conflicting torrents from the bittorrent
+client manually.
 
-The `Collision Recheck` job regularly verifies whether a conflicting torrent has
-been removed from the Bittorrent client, allowing the conflicting candidate to
-be injected.
+A `Collision Recheck` job regularly verifies whether a conflicting torrent has
+been removed from the bittorrent client, then allowing the candidate to be
+injected.
 
 ### Conflicting Rules
 
@@ -58,7 +60,7 @@ elected candidates is injected as replacement.
 
 ## Docker image
 
-A multiarch AMD64/ARM64 image is available at:
+Multiarch AMD64/ARM64 images are available at:
 
 `ghcr.io/pilounk/cross-seed:collisions`
 
