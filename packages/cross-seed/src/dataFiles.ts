@@ -63,6 +63,16 @@ export async function indexDataDirs(options: {
 	const { dataDirs, maxDataDepth } = getRuntimeConfig();
 	if (!dataDirs.length) return;
 
+	for (const dataDir of dataDirs) {
+		if (!modifiedPaths.has(dataDir)) {
+			modifiedPaths.set(dataDir, new Set());
+			modifiedPathTimes.set(dataDir, new Map());
+			if (!watchers.has(dataDir)) {
+				watchers.set(dataDir, createWatcher(dataDir));
+			}
+		}
+	}
+
 	if (options.startup) {
 		logger.info({
 			label: Label.INDEX,
