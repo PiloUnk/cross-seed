@@ -10,6 +10,7 @@ import { searcheesRouter } from "./searchees.js";
 import { clientsRouter } from "./clients.js";
 import { metaRouter } from "./meta.js";
 import { conflictRulesRouter } from "./conflictRules.js";
+import { conflictHistoryRouter } from "./conflictHistory.js";
 
 // Main app router
 export const appRouter = router({
@@ -24,6 +25,7 @@ export const appRouter = router({
 	clients: clientsRouter,
 	meta: metaRouter,
 	conflictRules: conflictRulesRouter,
+	conflictHistory: conflictHistoryRouter,
 });
 
 // Export type definition of API

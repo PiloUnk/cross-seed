@@ -250,20 +250,22 @@ function getBestTrackerPriority(
 async function removeTorrentFromClients(
 	infoHash: string,
 	searcheeName: string,
-): Promise<boolean> {
+): Promise<{ removed: boolean; removedClientHost: string | null }> {
 	const rows: { client_host: string | null }[] = await db("client_searchee")
 		.select("client_host")
 		.where({ info_hash: infoHash });
-	if (!rows.length) return false;
+	if (!rows.length) return { removed: false, removedClientHost: null };
 	const clients = getClients();
 	logger.verbose({
 		label: Label.DECIDE,
 		message: `${chalk.yellow("Attempting to remove existing torrent")} ${chalk.magenta(searcheeName)} [${sanitizeInfoHash(infoHash)}] from ${rows.length} client(s)`,
 	});
+	let removedClientHost: string | null = null;
 	for (const row of rows) {
-		if (!row.client_host) return false;
+		if (!row.client_host)
+			return { removed: false, removedClientHost: null };
 		const client = clients.find((c) => c.clientHost === row.client_host);
-		if (!client) return false;
+		if (!client) return { removed: false, removedClientHost: null };
 		logger.verbose({
 			label: Label.DECIDE,
 			message: `${chalk.yellow("Removing torrent")} ${chalk.magenta(searcheeName)} [${sanitizeInfoHash(infoHash)}] from ${client.label}`,
@@ -279,7 +281,7 @@ async function removeTorrentFromClients(
 				label: Label.DECIDE,
 				message: `Failed to remove torrent ${searcheeName} [${sanitizeInfoHash(infoHash)}] from ${client.label}: ${errMessage}`,
 			});
-			return false;
+			return { removed: false, removedClientHost: null };
 		}
 		const exists = await client.isTorrentInClient(infoHash);
 		if (exists.isErr() || exists.unwrap()) {
@@ -290,17 +292,50 @@ async function removeTorrentFromClients(
 				label: Label.DECIDE,
 				message: `Removal verification failed for ${searcheeName} [${sanitizeInfoHash(infoHash)}] on ${client.label}: ${errMessage}`,
 			});
-			return false;
+			return { removed: false, removedClientHost: null };
 		}
 		await db("client_searchee")
 			.where({ info_hash: infoHash, client_host: row.client_host })
 			.del();
+		removedClientHost = row.client_host;
 		logger.verbose({
 			label: Label.DECIDE,
 			message: `Removed torrent ${searcheeName} [${sanitizeInfoHash(infoHash)}] from ${client.label}`,
 		});
 	}
-	return true;
+	return { removed: true, removedClientHost };
+}
+
+async function recordConflictRemoval(
+	infoHash: string,
+	searcheeName: string,
+	removedTrackers: string[],
+	candidateTrackers: string[],
+	appliedRulePriority: number,
+	removedClientHost: string | null,
+): Promise<void> {
+	try {
+		await db("conflict_removals").insert({
+			timestamp: Date.now(),
+			searchee_name: searcheeName,
+			info_hash: infoHash,
+			removed_trackers: JSON.stringify(
+				normalizeTrackers(removedTrackers),
+			),
+			candidate_trackers: JSON.stringify(
+				normalizeTrackers(candidateTrackers),
+			),
+			applied_rule_priority: appliedRulePriority,
+			removed_client_host: removedClientHost,
+			injected_client_host: null,
+		});
+	} catch (e) {
+		logger.warn({
+			label: Label.DECIDE,
+			message: `Failed to record conflict removal for ${searcheeName} [${sanitizeInfoHash(infoHash)}]: ${e instanceof Error ? e.message : String(e)}`,
+		});
+		logger.debug(e);
+	}
 }
 
 async function resolveConflictRules(
@@ -356,18 +391,29 @@ async function resolveConflictRules(
 		label: Label.DECIDE,
 		message: `Conflict rules: candidate [${candidateTrackers.join(", ")}] (priority ${candidatePriority}) outranks current [${existingTrackers.join(", ")}] (priority ${bestExistingPriority}) for ${searcheeName} [${sanitizeInfoHash(infoHash)}]`,
 	});
-	const removed = await removeTorrentFromClients(infoHash, searcheeName);
+	const removalResult = await removeTorrentFromClients(
+		infoHash,
+		searcheeName,
+	);
 	const candidateLabel = candidateTrackers.length
 		? candidateTrackers.join(", ")
 		: "unknown";
 	const existingLabel = existingTrackers.length
 		? existingTrackers.join(", ")
 		: "unknown";
-	if (removed) {
+	if (removalResult.removed) {
 		logger.info({
 			label: Label.DECIDE,
 			message: `${chalk.yellow("Removed existing torrent")} ${chalk.magenta(searcheeName)} [${sanitizeInfoHash(infoHash)}] seeding on tracker ${chalk.yellow(existingLabel)} based on conflict rules for ${chalk.green(candidateLabel)}`,
 		});
+		await recordConflictRemoval(
+			infoHash,
+			searcheeName,
+			existingTrackers,
+			candidateTrackers,
+			candidatePriority,
+			removalResult.removedClientHost,
+		);
 		await cleanupCollisionRecords(infoHash, searcheeName);
 		await triggerImmediateReseach(searcheeName);
 	} else {
@@ -376,7 +422,7 @@ async function resolveConflictRules(
 			message: `Failed to remove existing torrent ${sanitizeInfoHash(infoHash)} seeding on tracker ${existingLabel} for conflict rules on ${candidateLabel}`,
 		});
 	}
-	return removed;
+	return removalResult.removed;
 }
 
 async function cleanupCollisionRecords(

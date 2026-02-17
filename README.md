@@ -58,6 +58,13 @@ elected candidates is injected as replacement.
 > as a third-party tracker. When configuring rules, explicitly select all
 > desired trackers to avoid unwanted torrent replacement.
 
+### Conflict History
+
+![Conflict History view](images/conflict-history.png)
+
+In order to track down torrent removal actions performed by cross-seed, a
+Conflict History view has been added.
+
 ## Docker image
 
 Multiarch AMD64/ARM64 images are available at:
@@ -68,6 +75,8 @@ Multiarch AMD64/ARM64 images are available at:
 
 After migrating from stock cross-seed version, you might want to clear old
 decisions which stated the info hash already exists in the bittorrent client
-while it could have been a collision:
+while it could have been a collision.
+
+This command will only clear these related decisions:
 
 `docker exec -it cross-seed cross-seed reset-stock-decisions`

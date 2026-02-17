@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   Shuffle,
   ListOrdered,
+  BookOpen,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,11 @@ const navItems = [
         title: 'Collisions',
         icon: <Shuffle className="size-4" />,
         url: '/collisions',
+      },
+      {
+        title: 'Conflict History',
+        icon: <BookOpen className="size-4" />,
+        url: '/conflict-history',
       },
       {
         title: 'Jobs',
