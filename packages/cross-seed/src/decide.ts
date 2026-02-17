@@ -747,8 +747,9 @@ export async function assessCandidate(
 	infoHashesToExclude: Set<string>,
 	blockList: string[],
 	options?: { configOverride: Partial<RuntimeConfig> },
-	candidateTracker?: string,
+	_candidateTracker?: string,
 ): Promise<ResultAssessment> {
+	void _candidateTracker;
 	const { includeSingleEpisodes, matchMode } = getRuntimeConfig(
 		options?.configOverride,
 	);
@@ -831,11 +832,7 @@ export async function assessCandidate(
 
 	if (infoHashesToExclude.has(metafile.infoHash)) {
 		const trackerMismatch = await logAnnounceMismatch(metafile);
-		const candidateTrackers = trackerMismatch?.candidateTrackers.length
-			? trackerMismatch.candidateTrackers
-			: candidateTracker
-				? [candidateTracker]
-				: [];
+		const candidateTrackers = trackerMismatch?.candidateTrackers ?? [];
 		if (candidateTrackers.length) {
 			const resolved = await resolveConflictRules(
 				metafile.infoHash,
@@ -1222,11 +1219,7 @@ export async function assessCandidateCaching(
 			metaOrCandidate instanceof Metafile
 				? await logAnnounceMismatch(metaOrCandidate)
 				: null;
-		const candidateTrackers = trackerMismatch?.candidateTrackers.length
-			? trackerMismatch.candidateTrackers
-			: tracker
-				? [tracker]
-				: [];
+		const candidateTrackers = trackerMismatch?.candidateTrackers ?? [];
 		if (candidateTrackers.length) {
 			const resolved = await resolveConflictRules(
 				cacheEntry.infoHash,
