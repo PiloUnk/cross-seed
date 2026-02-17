@@ -17,10 +17,10 @@ the torrent comes from another tracker.
 
 In such a situation, it is not viable to inject a second announce for the same
 torrent (often rejected by private trackers). It is also risky to rely on a
-second client to work around the issue in case of file corruption and private
-trackers may detect that as an abuse.
+second client to work around the issue in case of file corruption, and private
+trackers may detect that as abuse.
 
-This fork helps to be aware of conflicting torrents and make action.
+This fork helps you detect conflicting torrents and take action.
 
 ## Features
 
@@ -33,12 +33,11 @@ This fork helps to be aware of conflicting torrents and make action.
 ![Collisions view](images/collisions.png)
 
 By default, if there are no Conflict Rules, collisions are surfaced in the
-Collisions view for manual handling. It is then possible to report the issue to
-the trackers involved or remove the conflicting torrents from the bittorrent
-client manually.
+Collisions view for manual handling. You can report the issue to the trackers
+involved or remove the conflicting torrents from the bittorrent client manually.
 
 A `Collision Recheck` job regularly verifies whether a conflicting torrent has
-been removed from the bittorrent client, then allowing the candidate to be
+been removed from the bittorrent client, then allows the candidate to be
 injected.
 
 ### Conflict Rules
@@ -48,10 +47,10 @@ injected.
 By default, this feature is disabled.
 
 Conflict Rules allow tracker priority to be defined to solve collisions
-automatically. This is a way to promote seeding on prefered trackers for
-whatever reason. When rules apply, conflicting torrent of a lower priority
-tracker is removed from the bittorrent client without deleting the data and
-elected candidates is injected as replacement.
+automatically. This is a way to promote seeding on preferred trackers for
+whatever reason. When rules apply, a conflicting torrent from a lower-priority
+tracker is removed from the bittorrent client without deleting the data, and the
+selected candidate is injected as a replacement.
 
 > **Note:** The `All indexer trackers` rule only covers active indexers from the
 > Trackers Settings page. If an indexer is temporarily down, it will be treated
@@ -62,8 +61,8 @@ elected candidates is injected as replacement.
 
 ![Conflict History view](images/conflict-history.png)
 
-In order to track down torrent removal actions performed by cross-seed, a
-Conflict History view has been added.
+To track torrent removal actions performed by cross-seed, a Conflict History
+view has been added.
 
 ## Docker image
 
@@ -73,10 +72,10 @@ Multiarch AMD64/ARM64 images are available at:
 
 ## Usage
 
-After migrating from stock cross-seed version, you might want to clear old
-decisions which stated the info hash already exists in the bittorrent client
-while it could have been a collision.
+After migrating from the stock cross-seed version, you will likely want to clear
+old decisions that may have been collisions (`SAME_INFO_HASH` /
+`INFO_HASH_ALREADY_EXISTS`) so the search job can evaluate them again.
 
-This command will only clear these related decisions:
+This command will clear only these related decisions:
 
 `docker exec -it cross-seed cross-seed reset-stock-decisions`
