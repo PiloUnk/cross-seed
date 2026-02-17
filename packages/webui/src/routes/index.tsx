@@ -93,11 +93,16 @@ function Home() {
               description={`${statsData.wastedSnatchCount.toLocaleString()} snatched but mismatched`}
             />
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <StatCard
               title={indexerHealthTitle}
               value={indexerHealthValue}
               description={indexerHealthDescription}
+            />
+            <StatCard
+              title="Conflicts Handled"
+              value={statsData.conflictsHandled.toLocaleString()}
+              description="Torrents removed by Conflict Rules to promote another tracker"
             />
             <StatCard
               title="Recent Activity"

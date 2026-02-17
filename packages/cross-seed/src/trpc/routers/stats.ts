@@ -14,6 +14,7 @@ export const statsRouter = router({
 			decisionsByType,
 			recentMatches,
 			sameInfoHashCandidatesResult,
+			conflictsHandledResult,
 			matchAggregates,
 		] = await Promise.all([
 			db("searchee").count({ count: "*" }).first(),
@@ -44,6 +45,7 @@ export const statsRouter = router({
 				.count({ count: "*" })
 				.first(),
 			db("collisions").count({ count: "*" }).first(),
+			db("conflict_removals").count({ count: "*" }).first(),
 			db("decision")
 				.whereNotNull("info_hash")
 				.select({
@@ -105,6 +107,7 @@ export const statsRouter = router({
 		const sameInfoHashCandidates = Number(
 			sameInfoHashCandidatesResult?.count ?? 0,
 		);
+		const conflictsHandled = Number(conflictsHandledResult?.count ?? 0);
 
 		return {
 			totalSearchees,
@@ -124,6 +127,7 @@ export const statsRouter = router({
 			unhealthyIndexers,
 			allIndexersHealthy,
 			sameInfoHashCandidates,
+			conflictsHandled,
 			decisionBreakdown: decisionsByType,
 		};
 	}),
