@@ -32,7 +32,7 @@ This fork helps to be aware of conflicting torrents and make action.
 
 ![Collisions view](images/collisions.png)
 
-By default, if there are no Conflicting Rules, collisions are surfaced in the
+By default, if there are no Conflict Rules, collisions are surfaced in the
 Collisions view for manual handling. It is then possible to report the issue to
 the trackers involved or remove the conflicting torrents from the bittorrent
 client manually.
@@ -41,13 +41,13 @@ A `Collision Recheck` job regularly verifies whether a conflicting torrent has
 been removed from the bittorrent client, then allowing the candidate to be
 injected.
 
-### Conflicting Rules
+### Conflict Rules
 
-![Conflicting Rules view](images/conflicting-rules.png)
+![Conflict Rules view](images/conflict-rules.png)
 
 By default, this feature is disabled.
 
-Conflicting Rules allow tracker priority to be defined to solve collisions
+Conflict Rules allow tracker priority to be defined to solve collisions
 automatically. This is a way to promote seeding on prefered trackers for
 whatever reason. When rules apply, conflicting torrent of a lower priority
 tracker is removed from the bittorrent client without deleting the data and
@@ -64,7 +64,10 @@ Multiarch AMD64/ARM64 images are available at:
 
 `ghcr.io/pilounk/cross-seed:collisions`
 
-## Documentation
+## Usage
 
-For configuration, usage, and the rest of the setup, refer to the upstream
-cross-seed documentation.
+After migrating from stock cross-seed version, you might want to clear old
+decisions which stated the info hash already exists in the bittorrent client
+while it could have been a collision:
+
+`docker exec -it cross-seed cross-seed reset-stock-decisions`

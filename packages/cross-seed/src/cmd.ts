@@ -2,7 +2,7 @@
 import chalk from "chalk";
 import { Option, program } from "commander";
 import { getApiKey, resetApiKey } from "./auth.js";
-import { PROGRAM_NAME, PROGRAM_VERSION } from "./constants.js";
+import { Decision, PROGRAM_NAME, PROGRAM_VERSION } from "./constants.js";
 import { db } from "./db.js";
 import { updateTorrentCache } from "./decide.js";
 import { diffCmd } from "./diff.js";
@@ -80,6 +80,49 @@ program
 			await db("decision").whereNull("info_hash").del();
 			await db("timestamp").del();
 			await db("collisions").del();
+		}),
+	);
+
+program
+	.command("reset-stock-decisions")
+	.description(
+		"Clear INFO_HASH_ALREADY_EXISTS and SAME_INFO_HASH decisions plus related collisions and timestamps",
+	)
+	.action(
+		withMinimalRuntime(async () => {
+			console.log(
+				"Clearing cross-seed stock version decisions for identifying potential collisions...",
+			);
+			const decisions: { id: number; searchee_id: number | null }[] =
+				await db("decision")
+					.select("id", "searchee_id")
+					.whereIn("decision", [
+						Decision.INFO_HASH_ALREADY_EXISTS,
+						Decision.SAME_INFO_HASH,
+					]);
+			if (!decisions.length) return;
+			const decisionIds = decisions.map((row) => row.id);
+			const searcheeIds = Array.from(
+				new Set(
+					decisions
+						.map((row) => row.searchee_id)
+						.filter((id): id is number => id !== null),
+				),
+			);
+			await db.transaction(async (trx) => {
+				await trx("collisions")
+					.whereIn("decision_id", decisionIds)
+					.del();
+				if (searcheeIds.length) {
+					await trx("timestamp")
+						.whereIn("searchee_id", searcheeIds)
+						.del();
+				}
+				await trx("decision").whereIn("id", decisionIds).del();
+			});
+			console.log(
+				`Cleared ${decisionIds.length} decisions and ${searcheeIds.length} timestamp groups.`,
+			);
 		}),
 	);
 
