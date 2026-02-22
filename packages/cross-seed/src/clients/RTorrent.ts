@@ -747,7 +747,17 @@ export default class RTorrent implements TorrentClient {
 	async recheckTorrent(infoHash: string): Promise<void> {
 		// Pause first as it may resume after recheck automatically
 		await this.methodCallP<void>("d.pause", [infoHash]);
+		// Log message of pausing torrent with infoHash
+		logger.info({
+			label: this.label,
+			message: `Paused torrent [${infoHash}] for recheck`,
+		});
 		await this.methodCallP<void>("d.check_hash", [infoHash]);
+		// Log message of rechecking torrent with infoHash
+		logger.info({
+			label: this.label,
+			message: `Rechecking torrent [${infoHash}]`,
+		});
 	}
 
 	async removeTorrent(
@@ -782,6 +792,10 @@ export default class RTorrent implements TorrentClient {
 		let sleepTime = resumeSleepTime;
 		const stopTime = getResumeStopTime();
 		let stop = false;
+		logger.info({
+			label: this.label,
+			message: `resumeInjection start for [${sanitizeInfoHash(infoHash)}] checkOnce=${options.checkOnce} stopTime=${new Date(stopTime).toISOString()}`,
+		});
 		while (Date.now() < stopTime) {
 			if (options.checkOnce) {
 				if (stop) return;
@@ -792,11 +806,19 @@ export default class RTorrent implements TorrentClient {
 				onlyCompleted: false,
 			});
 			if (torrentInfoRes.isErr()) {
+				logger.warn({
+					label: this.label,
+					message: `resumeInjection checkOriginalTorrent failed for [${sanitizeInfoHash(infoHash)}]; retrying in ${resumeErrSleepTime}ms`,
+				});
 				sleepTime = resumeErrSleepTime; // Dropping connections or restart
 				continue;
 			}
 			const torrentInfo = torrentInfoRes.unwrap();
 			if (torrentInfo.hashing) {
+				logger.info({
+					label: this.label,
+					message: `resumeInjection waiting for hash check to finish for [${sanitizeInfoHash(infoHash)}]`,
+				});
 				continue;
 			}
 			const torrentLog = `${torrentInfo.name} [${sanitizeInfoHash(infoHash)}]`;
@@ -826,6 +848,10 @@ export default class RTorrent implements TorrentClient {
 					});
 					return;
 				}
+				logger.info({
+					label: this.label,
+					message: `resumeInjection override allowed for ${torrentLog}: remainingSize ${humanReadableSize(torrentInfo.bytesLeft, { binary: true })} > ${humanReadableSize(maxRemainingBytes, { binary: true })} limit`,
+				});
 			}
 			logger.info({
 				label: this.label,
@@ -869,10 +895,18 @@ export default class RTorrent implements TorrentClient {
 
 		const toRecheck = shouldRecheck(meta, decision);
 		const loadType = toRecheck ? "load.raw" : "load.raw_start";
+		logger.info({
+			label: this.label,
+			message: `Inject ${meta.name} [${sanitizeInfoHash(meta.infoHash)}]: toRecheck=${toRecheck} loadType=${loadType} directoryBase=${directoryBase}`,
+		});
 
 		const retries = 5;
 		for (let i = 0; i < retries; i++) {
 			try {
+				logger.info({
+					label: this.label,
+					message: `Inject attempt ${i + 1}/${retries} for [${sanitizeInfoHash(meta.infoHash)}]`,
+				});
 				await this.methodCallP<void>(
 					loadType,
 					[
@@ -887,6 +921,10 @@ export default class RTorrent implements TorrentClient {
 					].filter((e) => e !== null),
 				);
 				if (toRecheck) {
+					logger.info({
+						label: this.label,
+						message: `Inject scheduled resume after recheck for [${sanitizeInfoHash(meta.infoHash)}]`,
+					});
 					void this.resumeInjection(meta, decision, {
 						checkOnce: false,
 					});
