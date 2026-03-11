@@ -109,6 +109,27 @@ export type SearcheeClient = WithRequired<
 export type SearcheeVirtual = WithUndefined<Searchee, "infoHash" | "path">;
 export type SearcheeWithLabel = WithRequired<Searchee, "label">;
 
+const LEAKED_PUBLIC_TRACKERS = new Set([
+	"tracker.yggleak.top",
+	"tracker.opentrackr.org:1337",
+	"open.demonii.com:1337",
+]);
+
+function normalizePrivateFlagForTrackers(
+	privateFlag: boolean | undefined,
+	trackers: string[] | undefined,
+): boolean | undefined {
+	if (!privateFlag || !trackers?.length) {
+		return privateFlag;
+	}
+	for (const tracker of trackers) {
+		if (LEAKED_PUBLIC_TRACKERS.has(tracker.toLowerCase())) {
+			return false;
+		}
+	}
+	return privateFlag;
+}
+
 export function hasInfoHash(
 	searchee: Searchee,
 ): searchee is SearcheeWithInfoHash {
@@ -404,6 +425,15 @@ export async function updateSearcheeClientDB(
 	});
 	await inBatches(
 		newSearchees.map((searchee) => ({
+			private: (() => {
+				const normalizedPrivate = normalizePrivateFlagForTrackers(
+					searchee.private,
+					searchee.trackers,
+				);
+				return normalizedPrivate === undefined
+					? null
+					: normalizedPrivate;
+			})(),
 			info_hash: searchee.infoHash,
 			name: searchee.name,
 			title: searchee.title,
@@ -414,7 +444,6 @@ export async function updateSearcheeClientDB(
 			category: searchee.category ?? null,
 			tags: searchee.tags ? JSON.stringify(searchee.tags) : null,
 			trackers: JSON.stringify(searchee.trackers),
-			private: searchee.private === undefined ? null : searchee.private,
 		})),
 		async (batch) => {
 			await db("client_searchee")

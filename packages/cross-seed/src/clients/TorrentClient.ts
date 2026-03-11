@@ -29,6 +29,12 @@ import Transmission from "./Transmission.js";
 
 const activeClients: TorrentClient[] = [];
 
+const LEAKED_PUBLIC_TRACKERS = new Set([
+	"tracker.yggleak.top",
+	"tracker.opentrackr.org:1337",
+	"open.demonii.com:1337",
+]);
+
 type TorrentClientType =
 	| Label.QBITTORRENT
 	| Label.RTORRENT
@@ -198,11 +204,59 @@ export function byClientHostPriority(clientHost: string | undefined): number {
 
 export function clientSearcheeModified(
 	label: string,
-	dbTorrent,
+	dbTorrent:
+		| {
+				name?: string;
+				save_path?: string;
+				category?: string | null;
+				private?: boolean | number | null;
+				tags?: string | null;
+				trackers?: string | null;
+		  }
+		| undefined,
 	name: string,
 	savePath: string,
-	options: { category?: string; tags?: string[]; private?: boolean } = {},
+	options: {
+		category?: string;
+		tags?: string[];
+		private?: boolean;
+		trackers?: string[];
+	} = {},
 ): boolean {
+	void label;
+
+	const normalizeTracker = (tracker: string): string => {
+		const trimmed = tracker.trim();
+		if (!trimmed.length) return "";
+		return sanitizeTrackerUrl(trimmed) ?? trimmed.toLowerCase();
+	};
+
+	const normalizePrivateFlagForTrackers = (
+		privateFlag: boolean | undefined,
+		trackers: string[] | undefined,
+	): boolean | undefined => {
+		if (!privateFlag || !trackers?.length) {
+			return privateFlag;
+		}
+		for (const tracker of trackers) {
+			if (LEAKED_PUBLIC_TRACKERS.has(normalizeTracker(tracker))) {
+				return false;
+			}
+		}
+		return privateFlag;
+	};
+
+	const getDbTrackers = (): string[] => {
+		if (!dbTorrent?.trackers) return [];
+		try {
+			const parsed = JSON.parse(dbTorrent.trackers);
+			if (!Array.isArray(parsed)) return [];
+			return parsed.filter((item) => typeof item === "string");
+		} catch {
+			return [];
+		}
+	};
+
 	if (!dbTorrent) return true;
 	if (dbTorrent.name !== name) return true;
 	if (dbTorrent.save_path !== savePath) return true;
@@ -212,7 +266,16 @@ export function clientSearcheeModified(
 			dbTorrent.private === null || dbTorrent.private === undefined
 				? undefined
 				: Boolean(dbTorrent.private);
-		if (dbPrivate !== options.private) return true;
+		const dbTrackers = getDbTrackers();
+		const normalizedDbPrivate = normalizePrivateFlagForTrackers(
+			dbPrivate,
+			dbTrackers,
+		);
+		const normalizedPrivate = normalizePrivateFlagForTrackers(
+			options.private,
+			options.trackers ?? dbTrackers,
+		);
+		if (normalizedDbPrivate !== normalizedPrivate) return true;
 	}
 	if (
 		!isDeepStrictEqual(

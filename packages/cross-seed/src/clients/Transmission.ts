@@ -386,6 +386,12 @@ export default class Transmission implements TorrentClient {
 			const { name } = torrent;
 			const savePath = torrent.downloadDir;
 			const tags = torrent.labels;
+			const trackers = organizeTrackers(
+				torrent.trackers.map((tracker) => ({
+					url: tracker.announce,
+					tier: tracker.tier,
+				})),
+			);
 			const isPrivate = torrent.isPrivate;
 			const modified = clientSearcheeModified(
 				this.label,
@@ -395,6 +401,7 @@ export default class Transmission implements TorrentClient {
 				{
 					tags,
 					private: isPrivate,
+					trackers,
 				},
 			);
 			const refresh =
@@ -421,12 +428,6 @@ export default class Transmission implements TorrentClient {
 				});
 				continue;
 			}
-			const trackers = organizeTrackers(
-				torrent.trackers.map((tracker) => ({
-					url: tracker.announce,
-					tier: tracker.tier,
-				})),
-			);
 			const title = parseTitle(name, files) ?? name;
 			const length = torrent.totalSize;
 			const searchee: SearcheeClient = {

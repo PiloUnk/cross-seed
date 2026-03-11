@@ -683,6 +683,12 @@ export default class RTorrent implements TorrentClient {
 						.split(",")
 						.map((tag) => tag.trim())
 				: [];
+			const trackers = organizeTrackers(
+				results[i * numMethods + 7][0].map((arr: [string, string]) => ({
+					url: arr[0],
+					tier: Number(arr[1]),
+				})),
+			);
 			const modified = clientSearcheeModified(
 				this.label,
 				dbTorrent,
@@ -691,6 +697,7 @@ export default class RTorrent implements TorrentClient {
 				{
 					tags,
 					private: isPrivate,
+					trackers,
 				},
 			);
 			const refresh =
@@ -718,12 +725,6 @@ export default class RTorrent implements TorrentClient {
 				});
 				continue;
 			}
-			const trackers = organizeTrackers(
-				results[i * numMethods + 7][0].map((arr) => ({
-					url: arr[0],
-					tier: Number(arr[1]),
-				})),
-			);
 			const title = parseTitle(name, files) ?? name;
 			const searchee: SearcheeClient = {
 				infoHash,
