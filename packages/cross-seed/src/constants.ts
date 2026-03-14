@@ -172,6 +172,11 @@ export const ALL_EXTENSIONS = [
 export const TORRENT_CACHE_FOLDER = "torrent_cache";
 export const LOGS_FOLDER = "logs";
 export const UNKNOWN_TRACKER = "UnknownTracker";
+export const LEAKED_PUBLIC_TRACKERS = new Set([
+	"tracker.yggleak.top",
+	"tracker.opentrackr.org:1337",
+	"open.demonii.com:1337",
+]);
 export const MAX_PATH_BYTES = 255;
 export const LEVENSHTEIN_DIVISOR = 3;
 export const MIN_VIDEO_QUERY_LENGTH = 3;

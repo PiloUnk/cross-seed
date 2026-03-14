@@ -24,6 +24,7 @@ import {
 	RELEASE_GROUP_REGEX,
 	REPACK_PROPER_REGEX,
 	RES_STRICT_REGEX,
+	LEAKED_PUBLIC_TRACKERS,
 	SEASON_REGEX,
 	SONARR_SUBFOLDERS_REGEX,
 	VIDEO_DISC_EXTENSIONS,
@@ -108,12 +109,6 @@ export type SearcheeClient = WithRequired<
 >;
 export type SearcheeVirtual = WithUndefined<Searchee, "infoHash" | "path">;
 export type SearcheeWithLabel = WithRequired<Searchee, "label">;
-
-const LEAKED_PUBLIC_TRACKERS = new Set([
-	"tracker.yggleak.top",
-	"tracker.opentrackr.org:1337",
-	"open.demonii.com:1337",
-]);
 
 function normalizePrivateFlagForTrackers(
 	privateFlag: boolean | undefined,

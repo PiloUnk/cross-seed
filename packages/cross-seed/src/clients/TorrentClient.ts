@@ -10,6 +10,7 @@ import {
 	Decision,
 	DecisionAnyMatch,
 	InjectionResult,
+	LEAKED_PUBLIC_TRACKERS,
 	MatchMode,
 	RESUME_EXCLUDED_EXTS,
 	RESUME_EXCLUDED_KEYWORDS,
@@ -28,12 +29,6 @@ import RTorrent from "./RTorrent.js";
 import Transmission from "./Transmission.js";
 
 const activeClients: TorrentClient[] = [];
-
-const LEAKED_PUBLIC_TRACKERS = new Set([
-	"tracker.yggleak.top",
-	"tracker.opentrackr.org:1337",
-	"open.demonii.com:1337",
-]);
 
 type TorrentClientType =
 	| Label.QBITTORRENT

@@ -97,6 +97,22 @@ function ConflictHistoryPage() {
   const truncateHash = (hash: string) =>
     hash.length > 12 ? `${hash.slice(0, 6)}...${hash.slice(-6)}` : hash;
 
+  const renderTracker = (trackers?: string[]) => {
+    if (!trackers?.length) return 'Unknown';
+    if (trackers.length === 1) return trackers[0];
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-help">{trackers[0]}, ...</span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-80 break-words">
+          {trackers.join(', ')}
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
+
   return (
     <Page breadcrumbs={['Conflict History']}>
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -271,16 +287,8 @@ function ConflictHistoryPage() {
                       <TooltipContent>{item.infoHash}</TooltipContent>
                     </Tooltip>
                   </TableCell>
-                  <TableCell>
-                    {item.removedTrackers.length
-                      ? item.removedTrackers.join(', ')
-                      : 'Unknown'}
-                  </TableCell>
-                  <TableCell>
-                    {item.candidateTrackers.length
-                      ? item.candidateTrackers.join(', ')
-                      : 'Unknown'}
-                  </TableCell>
+                  <TableCell>{renderTracker(item.removedTrackers)}</TableCell>
+                  <TableCell>{renderTracker(item.candidateTrackers)}</TableCell>
                   <TableCell>
                     <span className="text-sm">
                       Level {item.appliedRulePriority + 1}

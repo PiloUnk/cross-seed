@@ -32,8 +32,6 @@ import {
   ChevronsRight,
   RotateCcw,
 } from 'lucide-react';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 
 export const Route = createFileRoute('/collisions')({
   component: CollisionsPage,
@@ -45,7 +43,6 @@ function CollisionsPage() {
   const trpc = useTRPC();
   const [page, setPage] = useState(0);
   const [showClient, setShowClient] = useState(false);
-  const [privateOnly, setPrivateOnly] = useState(false);
   const [candidateTrackerFilter, setCandidateTrackerFilter] = useState('all');
   const [currentTrackerFilter, setCurrentTrackerFilter] = useState('all');
 
@@ -65,9 +62,8 @@ function CollisionsPage() {
       includeKnownTrackers: true,
       candidateTracker: candidateFilterValue,
       currentTracker: currentFilterValue,
-      privateOnly,
     }),
-    [page, candidateFilterValue, currentFilterValue, privateOnly],
+    [page, candidateFilterValue, currentFilterValue],
   );
 
   const query = useSuspenseQuery(
@@ -89,7 +85,7 @@ function CollisionsPage() {
 
   useEffect(() => {
     setPage(0);
-  }, [candidateTrackerFilter, currentTrackerFilter, privateOnly]);
+  }, [candidateTrackerFilter, currentTrackerFilter]);
 
   const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
   const canGoPrev = page > 0;
@@ -100,6 +96,22 @@ function CollisionsPage() {
 
   const formatTimestamp = (value: string | null) =>
     value ? formatRelativeTime(value) : 'Never';
+
+  const renderTracker = (trackers?: string[]) => {
+    if (!trackers?.length) return 'Unknown';
+    if (trackers.length === 1) return trackers[0];
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-help">{trackers[0]}, ...</span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-80 break-words">
+          {trackers.join(', ')}
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
 
   return (
     <Page breadcrumbs={['Collisions']}>
@@ -114,12 +126,6 @@ function CollisionsPage() {
         </div>
         <div className="bg-muted/30 text-muted-foreground flex flex-col gap-3 rounded-lg border px-3 py-2 text-sm lg:flex-row lg:items-center lg:gap-4">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Label className="text-sm font-medium">
-                Only private torrents
-              </Label>
-              <Switch checked={privateOnly} onCheckedChange={setPrivateOnly} />
-            </div>
             <Tooltip>
               <TooltipTrigger asChild>
                 <span>
@@ -273,16 +279,8 @@ function CollisionsPage() {
                   <TableCell className="font-mono text-xs">
                     {item.infoHash ?? 'Unknown'}
                   </TableCell>
-                  <TableCell>
-                    {item.candidateTrackers.length
-                      ? item.candidateTrackers.join(', ')
-                      : 'Unknown'}
-                  </TableCell>
-                  <TableCell>
-                    {item.knownTrackers && item.knownTrackers.length
-                      ? item.knownTrackers.join(', ')
-                      : 'Unknown'}
-                  </TableCell>
+                  <TableCell>{renderTracker(item.candidateTrackers)}</TableCell>
+                  <TableCell>{renderTracker(item.knownTrackers)}</TableCell>
                   <TableCell>{formatTimestamp(item.firstSeenAt)}</TableCell>
                   <TableCell>{formatTimestamp(item.lastSeenAt)}</TableCell>
                   {showClient && (
