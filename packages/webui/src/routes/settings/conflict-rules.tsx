@@ -124,7 +124,9 @@ function ConflictRulesSettings() {
   const hasInitializedRef = useRef(false);
 
   const { data: trackerOptions } = useSuspenseQuery(
-    trpc.conflictRules.getTrackerOptions.queryOptions(),
+    trpc.conflictRules.getTrackerOptions.queryOptions({
+      includePublic: includePublicTrackers,
+    }),
   ) as { data: TrackerOptions };
 
   const { mutate: saveRules } = useMutation<
@@ -335,7 +337,7 @@ function ConflictRulesSettings() {
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <Label className="text-sm font-medium">
-                  Show third-party public trackers
+                  Show public trackers
                 </Label>
                 <Switch
                   checked={includePublicTrackers}

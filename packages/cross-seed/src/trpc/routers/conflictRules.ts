@@ -64,6 +64,28 @@ async function getIndexerTrackers(): Promise<string[]> {
 	return Array.from(trackerSet).sort();
 }
 
+async function getObservedTrackerPrivacy(): Promise<{
+	privateTrackers: Set<string>;
+	publicTrackers: Set<string>;
+}> {
+	const rows: {
+		trackers: string | null;
+		private: number | boolean | null;
+	}[] = await db("client_searchee").select("trackers", "private");
+	const privateTrackers = new Set<string>();
+	const publicTrackers = new Set<string>();
+	for (const row of rows) {
+		for (const tracker of parseTrackerList(row.trackers)) {
+			if (row.private === 1 || row.private === true) {
+				privateTrackers.add(tracker);
+			} else if (row.private === 0 || row.private === false) {
+				publicTrackers.add(tracker);
+			}
+		}
+	}
+	return { privateTrackers, publicTrackers };
+}
+
 export const conflictRulesRouter = router({
 	getRules: authedProcedure.query(async () => {
 		const rows: {
@@ -113,10 +135,31 @@ export const conflictRulesRouter = router({
 			return { success: true };
 		}),
 
-	getTrackerOptions: authedProcedure.query(async () => {
-		const trackers = await getIndexerTrackers();
-		return { trackers };
-	}),
+	getTrackerOptions: authedProcedure
+		.input(
+			z
+				.object({
+					includePublic: z.boolean().optional().default(false),
+				})
+				.optional(),
+		)
+		.query(async ({ input }) => {
+			const includePublic = input?.includePublic ?? false;
+			const trackers = await getIndexerTrackers();
+			if (includePublic) {
+				return { trackers };
+			}
+
+			const { privateTrackers, publicTrackers } =
+				await getObservedTrackerPrivacy();
+			const filtered = trackers.filter(
+				(tracker) =>
+					!publicTrackers.has(tracker) ||
+					privateTrackers.has(tracker),
+			);
+
+			return { trackers: filtered };
+		}),
 
 	getThirdPartyTrackers: authedProcedure
 		.input(
