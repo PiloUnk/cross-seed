@@ -49,3 +49,4 @@ coverage/
 **/.claude/settings.local.json
 packages/webui/src/routeTree.gen.ts
 .npm-cache/
+config.js.bak
