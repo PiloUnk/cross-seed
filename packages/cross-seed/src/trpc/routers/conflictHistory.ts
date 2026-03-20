@@ -85,6 +85,7 @@ export const conflictHistoryRouter = router({
 				.default({
 					limit: DEFAULT_LIMIT,
 					offset: 0,
+					includeClientInfo: false,
 				}),
 		)
 		.query(async ({ input }) => {
